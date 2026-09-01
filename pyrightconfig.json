@@ -1,0 +1,31 @@
+{
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "venvPath": "C:\\Users\\aitsi\\AppData\\Local\\Programs\\Python\\Python311",
+  "executionEnvironments": [
+    {
+      "root": "C:\\Users\\aitsi\\Desktop\\EA AI",
+      "pythonVersion": "3.11",
+      "pythonPlatform": "Windows",
+      "extraPaths": [
+        "C:\\Users\\aitsi\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages",
+        "C:\\Users\\aitsi\\Desktop\\EA AI"
+      ]
+    }
+  ],
+  "include": [
+    "skills",
+    "scripts",
+    "pipeline_orchestrator.py"
+  ],
+  "exclude": [
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    "lightning_logs",
+    "checkpoints"
+  ],
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "warning",
+  "typeCheckingMode": "basic"
+}

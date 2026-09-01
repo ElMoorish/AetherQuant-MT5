@@ -1,0 +1,51 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments & Local Configs
+.env
+.env.local
+.env.*.local
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs & Execution Telemetry
+*.log
+logs/
+scripts/*.log
+scripts/daemon_state.json
+
+# Private Backtest Results & Account Reports
+scripts/*.json
+*.json.bak
+lightning_logs/
+
+# System & IDE Dirs
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Lightning & Checkpoints: Exclude large intermediate checkpoints, keep only production models
+lightning_logs/
+scratch/
+checkpoints/*/*.ckpt
+!checkpoints/multi_asset/best_multi_asset_epoch=12_val_loss=-0.0248.ckpt
+!checkpoints/dual_head/best_dual_head_epoch=03_val_loss=0.3304.ckpt
+!checkpoints/super_alpha/best_super_patchtst_epoch=09_val_loss=-0.0435.ckpt
+checkpoints/*/*/*.zip
+checkpoints/*/checkpoints/
+checkpoints/*/logs/
