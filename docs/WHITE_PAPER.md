@@ -47,10 +47,10 @@ The system strictly adheres to the four non-negotiable quantitative rules define
 
 ```mermaid
 graph TD
-    RuleA[Rule A: Data Safety - Strict TimeSeriesSplit and 18 Stationary Alpha Features]
-    RuleB[Rule B: Risk Management - Hard SL-TP and Dynamic ATR Dollar Cap 14.90 USD]
-    RuleC[Rule C: Execution Isolation - PyTorch Lightning 16-bit AMP on GPU]
-    RuleD[Rule D: Interpretability - SHAP Verification and Survival Hazard Modeling]
+    RuleA["Rule A: Data Safety - Strict TimeSeriesSplit and 18 Stationary Alpha Features"]
+    RuleB["Rule B: Risk Management - Hard SL-TP and Dynamic ATR Dollar Cap 14.90 USD"]
+    RuleC["Rule C: Execution Isolation - PyTorch Lightning 16-bit AMP on GPU"]
+    RuleD["Rule D: Interpretability - SHAP Verification and Survival Hazard Modeling"]
 ```
 
 ---
@@ -61,22 +61,22 @@ The end-to-end execution pipeline operates continuously in real time:
 
 ```mermaid
 graph TD
-    A[Multi-Asset MT5 Feed: EURUSD, XAGUSD, NAS100, WTI] --> B[MT5 High-Frequency Ingestion: 25,000 Bars]
-    B --> C[18 Stationary Alpha Features and RevIN]
-    C --> D[SuperPatchTST Transformer: 1.42M Parameters]
-    D --> E[Multi-Horizon Forecast Vector: Forward Returns]
-    E --> F[Portfolio Risk Controller: Exposure and Limits]
-    F --> G[Hard Dollar Risk Cap: 14.90 USD per Trade]
-    F --> H[Rollover Blackout: 21:30 to 23:30 UTC]
-    F --> I[1-Hour Staggered Entry Queue]
-    F --> J[3-Hour Loss Cooldown Gate]
-    G --> K[Resilient Order Router: Pullback Limit Routing]
+    A["Multi-Asset MT5 Feed: EURUSD, XAGUSD, NAS100, WTI"] --> B["MT5 High-Frequency Ingestion: 25,000 Bars"]
+    B --> C["18 Stationary Alpha Features and RevIN"]
+    C --> D["SuperPatchTST Transformer: 1.42M Parameters"]
+    D --> E["Multi-Horizon Forecast Vector: Forward Returns"]
+    E --> F["Portfolio Risk Controller: Exposure and Limits"]
+    F --> G["Hard Dollar Risk Cap: 14.90 USD per Trade"]
+    F --> H["Rollover Blackout: 21:30 to 23:30 UTC"]
+    F --> I["1-Hour Staggered Entry Queue"]
+    F --> J["3-Hour Loss Cooldown Gate"]
+    G --> K["Resilient Order Router: Pullback Limit Routing"]
     H --> K
     I --> K
     J --> K
-    K --> L[MetaTrader 5 Terminal]
-    L --> M[Active Position Management: Trailing Stops and Breakeven]
-    M --> N[SOC 2 Real-Time Dashboard: 127.0.0.1:8000]
+    K --> L["MetaTrader 5 Terminal"]
+    L --> M["Active Position Management: Trailing Stops and Breakeven"]
+    M --> N["SOC 2 Real-Time Dashboard: 127.0.0.1:8000"]
 ```
 
 ---
@@ -152,13 +152,13 @@ $$\mathcal{L}_{\text{Total}} = \mathcal{L}_{\text{Huber}}(\hat{y}, y) + 0.5 \tim
 
 ```mermaid
 graph LR
-    A[Predicted Multi-Horizon Return] --> B[1. Huber Loss: Magnitude Accuracy]
-    A --> C[2. Directional Loss: Sign Alignment Penalty]
-    A --> D[3. Differentiable Sharpe: Equity Smoothness Maximizer]
-    B --> E[Combined Loss L_Total]
+    A["Predicted Multi-Horizon Return"] --> B["1. Huber Loss: Magnitude Accuracy"]
+    A --> C["2. Directional Loss: Sign Alignment Penalty"]
+    A --> D["3. Differentiable Sharpe: Equity Smoothness Maximizer"]
+    B --> E["Combined Loss L_Total"]
     C --> E
     D --> E
-    E --> F[Backpropagation and GPU Optimization]
+    E --> F["Backpropagation and GPU Optimization"]
 ```
 
 #### 1. Huber Loss (Robust Magnitude)
