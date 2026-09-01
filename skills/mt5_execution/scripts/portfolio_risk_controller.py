@@ -1,4 +1,4 @@
-﻿"""
+"""
 Institutional Portfolio Risk & Drawdown Controller (Precision Shield Edition)
 =============================================================================
 Enforces strict institutional portfolio-level risk limits, cross-asset correlation gates,
@@ -14,17 +14,24 @@ Rules:
   - Floating Drawdown Circuit Breaker: 1.50% hard halt
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
+from pathlib import Path
 import numpy as np
 import pandas as pd
+
+try:
+    from skills.mt5_execution.scripts.economic_calendar import EconomicCalendarEngine
+except ImportError:
+    from .economic_calendar import EconomicCalendarEngine
 
 logger = logging.getLogger("PortfolioRiskController")
 
 
 class PortfolioRiskController:
     """
-    Manages portfolio-wide capital allocation, cross-symbol correlations, and drawdown caps.
+    Manages portfolio-wide capital allocation, cross-symbol correlations, drawdown caps,
+    and Tier-1 Economic Calendar news blackout shields.
     """
 
     def __init__(
@@ -36,6 +43,7 @@ class PortfolioRiskController:
         consecutive_loss_limit: int = 2,           # Consecutive losses before freeze
         cooldown_hours: float = 3.0,               # Cooldown freeze duration
         stagger_seconds: int = 3600,               # Min spacing between trade entries (1 hour)
+        calendar: Optional[EconomicCalendarEngine] = None,
     ):
         self.max_portfolio_risk_pct = max_portfolio_risk_pct
         self.base_trade_risk_pct = base_trade_risk_pct
@@ -44,6 +52,7 @@ class PortfolioRiskController:
         self.consecutive_loss_limit = consecutive_loss_limit
         self.cooldown_hours = cooldown_hours
         self.stagger_seconds = stagger_seconds
+        self.calendar = calendar or EconomicCalendarEngine()
 
         self.consecutive_losses = 0
         self.cooldown_until: Optional[datetime] = None
@@ -195,12 +204,19 @@ class PortfolioRiskController:
         if self.is_rollover_window(current_time):
             return {"permitted": False, "risk_pct": 0.0, "reason": "SESSION_BLACKOUT: Daily rollover window (21:30 - 23:30 UTC)"}
 
-        # 3. Consecutive Loss Cooldown Check
+        # 3. Economic Calendar News Blackout Check (15m Pre / 30m Post Tier-1 News)
+        if self.calendar is not None:
+            is_news, ev_name = self.calendar.is_news_blackout(current_time, pre_window_min=15, post_window_min=30)
+            if is_news:
+                logger.warning(f"🛡️ Economic Calendar News Shield Activated! Blocking entry for {candidate_symbol}: {ev_name}")
+                return {"permitted": False, "risk_pct": 0.0, "reason": f"ECONOMIC_NEWS_BLACKOUT: {ev_name}"}
+
+        # 4. Consecutive Loss Cooldown Check
         if self.cooldown_until is not None and current_time < self.cooldown_until:
             rem_mins = int((self.cooldown_until - current_time).total_seconds() / 60)
             return {"permitted": False, "risk_pct": 0.0, "reason": f"CONSECUTIVE_LOSS_FREEZE: Cooldown active ({rem_mins} mins remaining)"}
 
-        # 4. Staggered Entry Queue Check
+        # 5. Staggered Entry Queue Check
         if self.last_entry_time is not None:
             elapsed = (current_time - self.last_entry_time).total_seconds()
             if elapsed < self.stagger_seconds:
