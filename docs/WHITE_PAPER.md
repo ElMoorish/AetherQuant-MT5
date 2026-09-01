@@ -46,13 +46,11 @@ AetherQuant-MT5 resolves these challenges by uniting four cutting-edge paradigms
 The system strictly adheres to the four non-negotiable quantitative rules defined in `AGENTS.md`:
 
 ```mermaid
-flowchart TD
-    subgraph Rules ["The Four Institutional Guardrails"]
-        RuleA["Rule A: Data Safety & Stationarity<br/>- Strict TimeSeriesSplit (No K-Fold)<br/>- Fit scalers strictly on train folds<br/>- 18 stationary alpha features only"]
-        RuleB["Rule B: Risk Management<br/>- Mandatory hard SL/TP on every order<br/>- Dynamic ATR lot sizing & Dollar Cap<br/>- Robust retry loops on order_send()"]
-        RuleC["Rule C: Execution Isolation<br/>- PyTorch Lightning 16-bit AMP on GPU<br/>- Independent RL & DL pipeline layers"]
-        RuleD["Rule D: Interpretability & Diagnostics<br/>- SHAP feature attribution verification<br/>- Survival hazard modeling for trade durations<br/>- Reject non-stationary price leakage"]
-    end
+graph TD
+    RuleA[Rule A: Data Safety - Strict TimeSeriesSplit and 18 Stationary Alpha Features]
+    RuleB[Rule B: Risk Management - Hard SL-TP and Dynamic ATR Dollar Cap 14.90 USD]
+    RuleC[Rule C: Execution Isolation - PyTorch Lightning 16-bit AMP on GPU]
+    RuleD[Rule D: Interpretability - SHAP Verification and Survival Hazard Modeling]
 ```
 
 ---
@@ -62,24 +60,23 @@ flowchart TD
 The end-to-end execution pipeline operates continuously in real time:
 
 ```mermaid
-flowchart TD
-    Market["Multi-Asset MT5 Feed<br/>(EURUSD, XAGUSD, NAS100, WTI)"] --> Ingestion["MT5 High-Frequency Ingestion<br/>(25,000 H1 & H4 Bars)"]
-    Ingestion --> FeatureEngine["18 Stationary Alpha Features<br/>(RevIN + Volatility Estimators)"]
-    FeatureEngine --> SuperPatchTST["SuperPatchTST Transformer<br/>(1.42M Params, 16-bit AMP GPU)"]
-    SuperPatchTST --> Signals["Multi-Horizon Forecast Vector<br/>[t+1 to t+5 Returns]"]
-    Signals --> RiskController["Portfolio Risk Controller<br/>(0.60% Exposure & Circuit Breakers)"]
-    
-    subgraph PrecisionShield ["Precision Shield Protections"]
-        HardCap["Hard Dollar Cap: <= $14.90 / trade"] --> Rollover["Rollover Blackout: 21:30 - 23:30 UTC"]
-        Rollover --> Stagger["1-Hour Staggered Entry Queue"]
-        Stagger --> Cooldown["3-Hour Loss Cooldown Gate"]
-    end
-    
-    RiskController --> HardCap
-    Cooldown --> OrderRouter["Resilient Order Router<br/>(Pullback Limit: 0.20x ATR Discount)"]
-    OrderRouter --> MT5Terminal["MetaTrader 5 Terminal"]
-    MT5Terminal --> LivePositions["Active Position Management<br/>(Dynamic Trailing Stop & Breakeven)"]
-    LivePositions --> Dashboard["SOC 2 Real-Time Dashboard<br/>(127.0.0.1:8000)"]
+graph TD
+    A[Multi-Asset MT5 Feed: EURUSD, XAGUSD, NAS100, WTI] --> B[MT5 High-Frequency Ingestion: 25,000 Bars]
+    B --> C[18 Stationary Alpha Features and RevIN]
+    C --> D[SuperPatchTST Transformer: 1.42M Parameters]
+    D --> E[Multi-Horizon Forecast Vector: Forward Returns]
+    E --> F[Portfolio Risk Controller: Exposure and Limits]
+    F --> G[Hard Dollar Risk Cap: 14.90 USD per Trade]
+    F --> H[Rollover Blackout: 21:30 to 23:30 UTC]
+    F --> I[1-Hour Staggered Entry Queue]
+    F --> J[3-Hour Loss Cooldown Gate]
+    G --> K[Resilient Order Router: Pullback Limit Routing]
+    H --> K
+    I --> K
+    J --> K
+    K --> L[MetaTrader 5 Terminal]
+    L --> M[Active Position Management: Trailing Stops and Breakeven]
+    M --> N[SOC 2 Real-Time Dashboard: 127.0.0.1:8000]
 ```
 
 ---
@@ -154,14 +151,14 @@ AetherQuant-MT5 trains on a custom composite loss function that unites three dis
 $$\mathcal{L}_{\text{Total}} = \mathcal{L}_{\text{Huber}}(\hat{y}, y) + 0.5 \times \mathcal{L}_{\text{Direction}}(\hat{y}, y) - 0.2 \times \text{Sharpe}(\text{PnL})$$
 
 ```mermaid
-flowchart LR
-    A["Predicted Multi-Horizon Return"] --> B["1. Huber Loss<br/>(Magnitude Accuracy)"]
-    A --> C["2. Directional Loss<br/>(Sign Alignment Penalty)"]
-    A --> D["3. Differentiable Sharpe<br/>(Equity Smoothness Maximizer)"]
-    B --> E["Combined Loss L_Total"]
+graph LR
+    A[Predicted Multi-Horizon Return] --> B[1. Huber Loss: Magnitude Accuracy]
+    A --> C[2. Directional Loss: Sign Alignment Penalty]
+    A --> D[3. Differentiable Sharpe: Equity Smoothness Maximizer]
+    B --> E[Combined Loss L_Total]
     C --> E
     D --> E
-    E --> F["Backpropagation & GPU Optimization"]
+    E --> F[Backpropagation and GPU Optimization]
 ```
 
 #### 1. Huber Loss (Robust Magnitude)
