@@ -17,23 +17,22 @@ An institutional-grade, multi-asset algorithmic trading system designed for auto
 
 ```mermaid
 flowchart TD
-    Market["🌐 Multi-Asset MT5 Feed<br/>(EURUSD, XAGUSD, NAS100, WTI)"] --> FeatureEngine["18 Stationary Alpha Features & RevIN"]
-    FeatureEngine --> SuperPatchTST["🧠 SuperPatchTST Transformer<br/>(PyTorch Lightning)"]
-    SuperPatchTST --> RiskController["🛡️ Portfolio Risk Controller<br/>(Rules B & D)"]
+    Market["Multi-Asset MT5 Feed<br/>(EURUSD, XAGUSD, NAS100, WTI)"] --> FeatureEngine["18 Stationary Alpha Features & RevIN"]
+    FeatureEngine --> SuperPatchTST["SuperPatchTST Transformer<br/>(PyTorch Lightning)"]
+    SuperPatchTST --> RiskController["Portfolio Risk Controller<br/>(Rules B & D)"]
     
     subgraph RiskRules ["Institutional Risk Management Rules"]
-        Cap["0.60% Max Simultaneous Portfolio Exposure"]
-        DollarCap["Hard Dollar Risk Ceiling ($15 / trade)"]
-        Corr["50% Correlation Discount on Macro Overlap"]
-        Halt["1.50% Floating Drawdown Circuit Breaker"]
-        Roll["Rollover Blackout (21:30 - 23:30 UTC)"]
-        Stagger["1-Hour Staggered Entry Queue"]
+        Cap["0.60% Max Simultaneous Exposure"] --> DollarCap["Hard Dollar Risk Ceiling ($15/trade)"]
+        DollarCap --> Corr["50% Correlation Discount"]
+        Corr --> Halt["1.50% Drawdown Circuit Breaker"]
+        Halt --> Roll["Rollover Blackout (21:30-23:30 UTC)"]
+        Roll --> Stagger["1-Hour Staggered Entry Queue"]
     end
     
-    RiskController --> RiskRules
-    RiskRules --> OrderRouter["⚡ Resilient Order Router<br/>(Hard SL/TP & Pullback Limit)"]
-    OrderRouter --> MT5["💻 MetaTrader 5 Terminal"]
-    MT5 --> Dashboard["📊 SOC 2 Real-Time Dashboard<br/>(127.0.0.1:8000)"]
+    RiskController --> Cap
+    Stagger --> OrderRouter["Resilient Order Router<br/>(Hard SL/TP & Pullback Limit)"]
+    OrderRouter --> MT5["MetaTrader 5 Terminal"]
+    MT5 --> Dashboard["SOC 2 Real-Time Dashboard<br/>(127.0.0.1:8000)"]
 ```
 
 ---
