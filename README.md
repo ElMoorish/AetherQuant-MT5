@@ -1,4 +1,4 @@
-﻿# 🏛️ EA AI: Autonomous Multi-Asset Quantitative Trading System
+# 🏛️ AetherQuant-MT5: Autonomous Multi-Asset Quantitative Trading System
 
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
 [![PyTorch Lightning](https://img.shields.io/badge/PyTorch_Lightning-2.0+-792EE5.svg)](https://lightning.ai/)
@@ -13,12 +13,12 @@ An institutional-grade, multi-asset algorithmic trading system designed for auto
 ## 📐 Architecture Overview
 
 ```mermaid
-graph TD
-    Market["🌐 Multi-Asset MT5 Feed (EURUSD, XAGUSD, NAS100, WTI)"] --> FeatureEngine["18 Stationary Alpha Features & RevIN"]
-    FeatureEngine --> SuperPatchTST["🧠 SuperPatchTST Transformer (PyTorch Lightning)"]
-    SuperPatchTST --> RiskController["🛡️ Portfolio Risk Controller (Rule B & Rule D)"]
+flowchart TD
+    Market["🌐 Multi-Asset MT5 Feed<br/>(EURUSD, XAGUSD, NAS100, WTI)"] --> FeatureEngine["18 Stationary Alpha Features & RevIN"]
+    FeatureEngine --> SuperPatchTST["🧠 SuperPatchTST Transformer<br/>(PyTorch Lightning)"]
+    SuperPatchTST --> RiskController["🛡️ Portfolio Risk Controller<br/>(Rules B & D)"]
     
-    subgraph RiskController ["Institutional Risk Management"]
+    subgraph RiskRules ["Institutional Risk Management Rules"]
         Cap["0.60% Max Simultaneous Portfolio Exposure"]
         DollarCap["Hard Dollar Risk Ceiling ($15 / trade)"]
         Corr["50% Correlation Discount on Macro Overlap"]
@@ -27,9 +27,10 @@ graph TD
         Stagger["1-Hour Staggered Entry Queue"]
     end
     
-    RiskController --> OrderRouter["⚡ Resilient Order Router (Hard SL/TP & Trailing)"]
+    RiskController --> RiskRules
+    RiskRules --> OrderRouter["⚡ Resilient Order Router<br/>(Hard SL/TP & Pullback Limit)"]
     OrderRouter --> MT5["💻 MetaTrader 5 Terminal"]
-    MT5 --> Dashboard["📊 SOC 2 Real-Time Dashboard (127.0.0.1:8000)"]
+    MT5 --> Dashboard["📊 SOC 2 Real-Time Dashboard<br/>(127.0.0.1:8000)"]
 ```
 
 ---
