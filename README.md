@@ -4,9 +4,12 @@
 [![PyTorch Lightning](https://img.shields.io/badge/PyTorch_Lightning-2.0+-792EE5.svg)](https://lightning.ai/)
 [![MetaTrader 5](https://img.shields.io/badge/MetaTrader_5-Python_API-green.svg)](https://www.mql5.com/)
 [![SOC 2 Architecture](https://img.shields.io/badge/Security-SOC_2_Compliant-00f0ff.svg)](http://127.0.0.1:8000)
+[![Documentation: White Paper](https://img.shields.io/badge/White_Paper-Architecture_&_Math-orange.svg)](docs/WHITE_PAPER.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 An institutional-grade, multi-asset algorithmic trading system designed for automated execution on **MetaTrader 5 (MT5)**. Built upon the `K-Dense-AI / scientific-agent-skills` framework, it integrates **Patch Time-Series Transformers (PatchTST)**, multi-resolution cross-attention, survival hazard analysis, and dynamic institutional risk controllers.
+
+> 📖 **Read the Complete Technical White Paper:** [**`docs/WHITE_PAPER.md`**](docs/WHITE_PAPER.md) for full mathematical formulations, loss engineering, and architecture diagrams.
 
 ---
 
@@ -61,7 +64,7 @@ flowchart TD
 ## 📂 Modular Skill Structure
 
 ```
-EA-AI/
+AetherQuant-MT5/
 ├── .agents/skills/                   # Modular Scientific Skills
 │   ├── mt5_execution/                # MT5 connection, RiskManager, OrderRouter, PortfolioRiskController
 │   ├── time_series_deep_learning/    # PyTorch Lightning PatchTST, RevIN, Multi-Horizon Sequence Modeling
@@ -94,8 +97,8 @@ EA-AI/
 ### 2. Installation
 Clone the repository and install required packages:
 ```bash
-git clone https://github.com/your-username/EA-AI.git
-cd EA-AI
+git clone https://github.com/ElMoorish/AetherQuant-MT5.git
+cd AetherQuant-MT5
 pip install -r requirements.txt
 ```
 
@@ -150,6 +153,14 @@ Open your browser at [**http://127.0.0.1:8000**](http://127.0.0.1:8000) for real
 - **Strict Local Loopback:** The dashboard server binds exclusively to `127.0.0.1` (never exposed to external networks).
 - **OWASP Security Headers:** Enforces Content Security Policy (CSP), X-Frame-Options (`DENY`), and X-Content-Type-Options (`nosniff`).
 - **Zero Hardcoded Secrets:** All credentials are loaded exclusively from `.env` or system environment variables.
+
+---
+
+## 👨‍💻 Author & Maintainer
+
+**ElMoorish**
+* Full Stack Developer & Cybersecurity Enthusiast | Applied AI/ML & Quantitative Systems
+* GitHub: [@ElMoorish](https://github.com/ElMoorish)
 
 ---
 
