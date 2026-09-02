@@ -199,25 +199,6 @@ class MT5Client:
 
         return symbol
 
-    def _generate_synthetic_rates(self, count: int) -> pd.DataFrame:
-        """Generates deterministic stationary financial time series for fallback."""
-        np.random.seed(42)
-        dates = pd.date_range(end=datetime.now(), periods=count, freq="5min")
-        ret = np.random.normal(0.00002, 0.0008, count)
-        price = 1.0850 * np.exp(np.cumsum(ret))
-        df = pd.DataFrame({
-            "time": dates,
-            "open": price,
-            "high": price * (1 + np.abs(np.random.normal(0, 0.0003, count))),
-            "low": price * (1 - np.abs(np.random.normal(0, 0.0003, count))),
-            "close": price * (1 + np.random.normal(0, 0.0002, count)),
-            "tick_volume": np.random.randint(100, 1000, count),
-            "spread": np.full(count, 10),
-            "real_volume": np.zeros(count),
-        })
-        df["log_return"] = np.log(df["close"] / df["close"].shift(1)).fillna(0.0)
-        return df
-
     def get_rates(
         self,
         symbol: str,
@@ -227,9 +208,10 @@ class MT5Client:
     ) -> pd.DataFrame:
         """
         Fetches historical OHLCV bar data and computes stationary log returns.
+        Strict 100% Real Broker Data (Zero Silent Fallbacks).
         """
         if not MT5_AVAILABLE or not self.connected:
-            return self._generate_synthetic_rates(count)
+            raise ConnectionError(f"MT5 terminal is disconnected! Cannot retrieve live rates for {symbol}.")
 
         resolved_symbol = self._resolve_symbol(symbol)
         mt5.symbol_select(resolved_symbol, True)
@@ -237,11 +219,10 @@ class MT5Client:
         tf = TIMEFRAME_MAP.get(timeframe.upper(), mt5.TIMEFRAME_M5)
         rates = mt5.copy_rates_from_pos(resolved_symbol, tf, start_pos, count)
         if rates is None or len(rates) == 0:
-            logger.warning(
+            raise RuntimeError(
                 f"Failed to fetch rates for {symbol} (resolved: {resolved_symbol}, {timeframe}), "
-                f"error: {mt5.last_error()}. Falling back to simulated series."
+                f"error: {mt5.last_error()}."
             )
-            return self._generate_synthetic_rates(count)
 
         df = pd.DataFrame(rates)
         df["time"] = pd.to_datetime(df["time"], unit="s")
