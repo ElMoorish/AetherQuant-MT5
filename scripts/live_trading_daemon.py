@@ -15,7 +15,7 @@ Risk Controls:
 """
 import sys, io, os, time, json, signal, argparse, warnings, logging
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple, List
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -92,7 +92,7 @@ class MultiAssetTradingDaemon:
         checkpoint_path: str = DEFAULT_CKPT,
         magic_number: int = 10101,
     ):
-        self.symbols = [s.upper() for s in (symbols or ["EURUSD", "XAGUSD", "NAS100", "WTI"])]
+        self.symbols = [s.upper() for s in (symbols or ["EURUSD", "NAS100", "WTI"])]
         self.timeframe = timeframe.upper()
         self.mode = mode.lower()
         self.base_risk_pct = base_risk_pct
