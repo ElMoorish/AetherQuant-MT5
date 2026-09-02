@@ -137,14 +137,14 @@ class MultiAssetTradingDaemon:
         self.processed_deal_tickets: set = set()
         self.state: Dict[str, Any] = {
             "status": "INITIALIZING",
-            "tier": "Balanced Growth (Macro Precision Shield)",
+            "tier": "Balanced Growth (Macro Precision Shield + Temporal Confluence)",
             "mode": self.mode,
             "symbols": self.symbols,
             "timeframe": self.timeframe,
             "base_risk_pct": self.base_risk_pct,
             "max_portfolio_risk_pct": max_portfolio_risk_pct,
             "magic_number": self.magic_number,
-            "model_architecture": "MacroSuperPatchTST (23-Channel Economic Calendar Attention)",
+            "model_architecture": "MacroSuperPatchTST (23-Channel Economic Attention + 5-Horizon Temporal Confluence)",
             "last_update": datetime.now().isoformat(),
             "active_positions": [],
             "signals": {},
@@ -268,11 +268,24 @@ class MultiAssetTradingDaemon:
 
         x_t = torch.tensor(X[-96:], dtype=torch.float32).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            preds = self.model(x_t).cpu().numpy()[0]
+            preds = self.model(x_t).cpu().numpy()[0] # Multi-horizon forecast: [h1, h2, h3, h4, h5]
 
+        h1_pred = float(preds[0])
         mean_pred = float(np.mean(preds))
-        # True Production High-Conviction Alpha Signal Threshold (+/- 0.000300)
-        signal_type = "BUY" if mean_pred > 0.00030 else ("SELL" if mean_pred < -0.00030 else "FLAT")
+        
+        # Temporal Path Confluence (Strict 5-Horizon Path Consensus)
+        # 1. Strict directional consensus across all 5 forecast horizons (h1..h5 all > 0 or all < 0)
+        # 2. Mean 5-hour trajectory conviction > 0.00025 AND 1-hour hurdle > 0.00030
+        is_bullish_path = bool(np.all(preds > 0))
+        is_bearish_path = bool(np.all(preds < 0))
+        mean_traj = float(np.mean(np.abs(preds)))
+
+        signal_type = "FLAT"
+        if abs(h1_pred) > 0.00030 and mean_traj > 0.00025:
+            if is_bullish_path:
+                signal_type = "BUY"
+            elif is_bearish_path:
+                signal_type = "SELL"
 
         bar_time = str(feat_df["time"].iloc[-1]) if "time" in feat_df else datetime.now().isoformat()
         
@@ -287,7 +300,9 @@ class MultiAssetTradingDaemon:
             "price": current_price,
             "signal": signal_type,
             "forecast_return": round(mean_pred, 6),
-            "confidence": round(abs(mean_pred), 6),
+            "h1_forecast": round(h1_pred, 6),
+            "path_confluence": "BULLISH_CONSENSUS" if is_bullish_path else ("BEARISH_CONSENSUS" if is_bearish_path else "DIVERGENT"),
+            "confidence": round(mean_traj, 6),
         }
 
         # Check existing positions for this symbol
