@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EA AI — Institutional Multi-Asset Quantitative Live Terminal</title>
+  <title>AetherQuant-MT5 — SOTA Institutional Multi-Asset Quantitative Terminal</title>
   
-  <!-- Fonts -->
+  <!-- Modern Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -19,242 +19,321 @@
 <body>
   <div class="app-layout">
     
-    <!-- Top Navigation Header -->
+    <!-- Top Command Navigation -->
     <header class="top-nav">
       <div class="brand-section">
         <div class="brand-logo">
-          <span class="logo-dot"></span>
-          <span class="brand-name">EA AI</span>
-          <span class="brand-tag">MULTI-ASSET QUANT</span>
-        </div>
-        <div class="security-badge" title="Strict Local Loopback Binding (127.0.0.1) & OWASP Security Headers">
-          <span class="badge-icon">🛡️</span> SOC 2 COMPLIANT
+          <div class="quantum-orb">
+            <span class="orb-core"></span>
+            <span class="orb-ring"></span>
+          </div>
+          <div class="brand-titles">
+            <div class="brand-row">
+              <span class="brand-name">AetherQuant</span>
+              <span class="brand-version">v3.0 HYPERQUANT</span>
+            </div>
+            <span class="brand-sub">Autonomous MetaTrader 5 Multi-Asset Deep Learning Execution Engine</span>
+          </div>
         </div>
       </div>
 
       <div class="telemetry-bar">
-        <div class="telemetry-item">
-          <span class="label">DAEMON</span>
+        <div class="telemetry-pill">
+          <span class="pill-label">DAEMON</span>
           <span id="daemon-badge" class="badge badge-success"><span class="pulse-dot"></span> RUNNING</span>
         </div>
-        <div class="telemetry-item">
-          <span class="label">TIER</span>
-          <span class="badge" style="background: rgba(0, 240, 255, 0.15); color: #00f0ff; border: 1px solid #00f0ff;">BALANCED GROWTH (0.15%)</span>
+        <div class="telemetry-pill">
+          <span class="pill-label">AI ARCHITECTURE</span>
+          <span class="badge badge-ai">MacroSuperPatchTST (23-Ch • RTX 4060)</span>
         </div>
-        <div class="telemetry-item">
-          <span class="label">ACCOUNT</span>
-          <span id="account-id" class="value">#--</span>
+        <div class="telemetry-pill">
+          <span class="pill-label">RISK SHIELD</span>
+          <span class="badge badge-cyan">0.15% ($14.81 Cap)</span>
         </div>
-        <div class="telemetry-item">
-          <span class="label">MAGIC</span>
-          <span id="magic-number" class="value mono">10101</span>
+        <div class="telemetry-pill">
+          <span class="pill-label">ACCOUNT</span>
+          <span id="account-id" class="mono text-white">#514404890</span>
         </div>
-        <div class="telemetry-item">
-          <span class="label">PING</span>
-          <span id="latency" class="value text-success">1ms</span>
+        <div class="telemetry-pill">
+          <span class="pill-label">LATENCY</span>
+          <span id="latency" class="mono text-success">1ms</span>
         </div>
-        <div class="telemetry-item time-item">
-          <span id="clock" class="value mono">--:--:-- UTC</span>
+        <div class="telemetry-pill clock-pill">
+          <span id="clock" class="mono clock-text">--:--:-- UTC</span>
         </div>
       </div>
     </header>
 
-    <!-- Main Dashboard Container -->
-    <main class="dashboard-grid">
+    <!-- Executive KPI Grid -->
+    <section class="kpi-grid">
       
-      <!-- Account KPI Ribbon -->
-      <section class="kpi-ribbon">
-        <div class="kpi-card">
-          <div class="kpi-header">
-            <span class="kpi-title">TOTAL EQUITY</span>
-            <span class="kpi-icon">💰</span>
-          </div>
-          <div class="kpi-value" id="kpi-equity">$10,019.08</div>
-          <div class="kpi-sub" id="kpi-balance-sub">Balance: $10,002.09</div>
+      <!-- KPI 1: Real-Time Equity -->
+      <div class="kpi-card glow-cyan">
+        <div class="kpi-top">
+          <span class="kpi-label">TOTAL ACCOUNT EQUITY</span>
+          <span class="kpi-icon">💰</span>
         </div>
+        <div class="kpi-main" id="kpi-equity">$9,870.40</div>
+        <div class="kpi-footer">
+          <span class="kpi-sub-text" id="kpi-balance-sub">Balance: $9,870.40</span>
+          <span class="kpi-badge badge-green" id="kpi-leverage">1:100 MT5</span>
+        </div>
+      </div>
 
-        <div class="kpi-card">
-          <div class="kpi-header">
-            <span class="kpi-title">PORTFOLIO FLOATING P&L</span>
-            <span class="kpi-icon">📊</span>
-          </div>
-          <div class="kpi-value text-success" id="kpi-floating-pnl">+$16.99</div>
-          <div class="kpi-sub" id="kpi-floating-pips">4 Assets Monitored</div>
+      <!-- KPI 2: Live Realized / Floating PnL -->
+      <div class="kpi-card glow-green">
+        <div class="kpi-top">
+          <span class="kpi-label">PORTFOLIO FLOATING P&L</span>
+          <span class="kpi-icon">📈</span>
         </div>
+        <div class="kpi-main text-success" id="kpi-floating-pnl">+$0.00</div>
+        <div class="kpi-footer">
+          <span class="kpi-sub-text" id="kpi-closed-pnl">Realized Today: <strong class="text-success">+$34.99</strong></span>
+          <span class="kpi-badge badge-cyan" id="kpi-streak">0 Losses / 2 Freeze</span>
+        </div>
+      </div>
 
-        <div class="kpi-card">
-          <div class="kpi-header">
-            <span class="kpi-title">DRAWDOWN CIRCUIT BREAKER</span>
-            <span class="kpi-icon">🛡️</span>
-          </div>
-          <div class="kpi-value text-cyan" id="kpi-margin-level">NORMAL (1.50% Cap)</div>
-          <div class="kpi-sub" id="kpi-free-margin">Max 4-Yr DD: 1.14%</div>
+      <!-- KPI 3: Max Drawdown & Risk Budget -->
+      <div class="kpi-card glow-purple">
+        <div class="kpi-top">
+          <span class="kpi-label">4-YEAR MAX DRAWDOWN</span>
+          <span class="kpi-icon">🛡️</span>
         </div>
+        <div class="kpi-main text-cyan" id="kpi-max-dd">0.98%</div>
+        <div class="kpi-footer">
+          <span class="kpi-sub-text">Portfolio Budget: 0.15% / 0.60% Max</span>
+          <span class="kpi-badge badge-shield">SHIELD ARMED</span>
+        </div>
+      </div>
 
-        <div class="kpi-card">
-          <div class="kpi-header">
-            <span class="kpi-title">PORTFOLIO RISK BUDGET</span>
-            <span class="kpi-icon">🎯</span>
-          </div>
-          <div class="kpi-value text-accent" id="kpi-risk-pct">0.15% / 0.60% Max</div>
-          <div class="kpi-sub">CAGR: 120.98% / Sharpe: 30.6</div>
+      <!-- KPI 4: 4-Year Strategy Alpha Return -->
+      <div class="kpi-card glow-amber">
+        <div class="kpi-top">
+          <span class="kpi-label">4-YEAR STRATEGY RETURN</span>
+          <span class="kpi-icon">⚡</span>
         </div>
-      </section>
+        <div class="kpi-main text-amber" id="kpi-return">+1,414.39%</div>
+        <div class="kpi-footer">
+          <span class="kpi-sub-text">Win Rate: <strong>62.2% – 72%+</strong></span>
+          <span class="kpi-badge badge-amber">Sharpe: 19.57</span>
+        </div>
+      </div>
 
-      <!-- Multi-Asset Live Positions Table -->
-      <section class="content-panel full-width">
-        <div class="panel-header">
-          <div class="panel-title-group">
-            <span class="panel-icon">💼</span>
-            <h2>Active Multi-Asset Positions (Magic #10101)</h2>
-          </div>
-          <div class="panel-meta">
-            <span id="pos-count" class="badge badge-cyan">4 Open Positions</span>
-          </div>
-        </div>
+    </section>
+
+    <!-- Main Workspace Split Grid -->
+    <div class="workspace-grid">
+      
+      <!-- Left Column: Multi-Asset Chart & Active Positions -->
+      <div class="workspace-left">
         
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Ticket</th>
-                <th>Asset</th>
-                <th>Side</th>
-                <th>Volume</th>
-                <th>Entry Price</th>
-                <th>Current Price</th>
-                <th>Hard SL</th>
-                <th>Hard TP</th>
-                <th>Pips</th>
-                <th>Net P&L ($)</th>
-              </tr>
-            </thead>
-            <tbody id="positions-body">
-              <tr>
-                <td colspan="10" class="text-dim" style="text-align:center; padding: 24px;">Streaming live MT5 positions...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Primary Analytics Split Grid -->
-      <div class="analytics-split">
-        
-        <!-- Live EURUSD Price & Execution Stream -->
-        <section class="content-panel chart-panel">
+        <!-- Live Interactive Chart Module -->
+        <section class="glass-panel chart-panel">
           <div class="panel-header">
-            <div class="panel-title-group">
-              <span class="panel-icon">📈</span>
-              <h2>Real-Time Live Chart Feed & Mandatory SL/TP Visualizer</h2>
+            <div class="header-left">
+              <span class="panel-icon">📊</span>
+              <div>
+                <h2 class="panel-title">Real-Time Market Stream & Dynamic Exit Visualizer</h2>
+                <span class="panel-subtitle">Streaming 1-Hour OHLCV Candlesticks with Model-Driven Sizing & Emergency SL Bands</span>
+              </div>
             </div>
-            <div class="chart-controls">
-              <span class="badge badge-dim">MT5 H1 FEED</span>
-              <span class="live-indicator"><span class="pulse-dot-cyan"></span> TICK STREAM</span>
+            
+            <!-- Asset Selector Tabs -->
+            <div class="asset-tabs">
+              <button class="asset-tab active" data-symbol="EURUSD" onclick="switchAsset('EURUSD')">
+                <span class="tab-dot"></span> EURUSD <span class="tab-sub">FX</span>
+              </button>
+              <button class="asset-tab" data-symbol="NAS100" onclick="switchAsset('NAS100')">
+                <span class="tab-dot"></span> NAS100 <span class="tab-sub">INDEX</span>
+              </button>
+              <button class="asset-tab" data-symbol="WTI" onclick="switchAsset('WTI')">
+                <span class="tab-dot"></span> WTI <span class="tab-sub">OIL</span>
+              </button>
             </div>
           </div>
-          <div class="chart-wrapper">
+
+          <!-- Price & Bar Stats Ribbon -->
+          <div class="bar-stats-ribbon">
+            <div class="stat-item"><span class="stat-label">SELECTED:</span> <span id="stat-symbol" class="mono font-bold text-white">EURUSD</span></div>
+            <div class="stat-item"><span class="stat-label">CURRENT:</span> <span id="stat-price" class="mono text-cyan">1.15685</span></div>
+            <div class="stat-item"><span class="stat-label">OPEN:</span> <span id="stat-open" class="mono text-muted">1.15720</span></div>
+            <div class="stat-item"><span class="stat-label">HIGH:</span> <span id="stat-high" class="mono text-success">1.15795</span></div>
+            <div class="stat-item"><span class="stat-label">LOW:</span> <span id="stat-low" class="mono text-coral">1.15640</span></div>
+            <div class="stat-item"><span class="stat-label">TIMEFRAME:</span> <span class="badge badge-dim">H1 (1-Hour)</span></div>
+          </div>
+
+          <div class="chart-container">
             <canvas id="priceChart"></canvas>
           </div>
         </section>
 
-        <!-- Neural Multi-Asset Alpha Gauges -->
-        <section class="content-panel intelligence-panel">
+        <!-- Active Multi-Asset Positions Table -->
+        <section class="glass-panel positions-panel">
           <div class="panel-header">
-            <div class="panel-title-group">
-              <span class="panel-icon">🧠</span>
-              <h2>Multi-Asset Neural Forecasts & Cross-Attention</h2>
+            <div class="header-left">
+              <span class="panel-icon">💼</span>
+              <div>
+                <h2 class="panel-title">Active MT5 Positions (Magic #10101)</h2>
+                <span class="panel-subtitle">Live Broker Position State with Model-Driven Dynamic Exits & Trailing Protection</span>
+              </div>
             </div>
+            <span id="pos-count-badge" class="badge badge-cyan">1 Open Position</span>
           </div>
-          
-          <div class="intel-body">
-            
-            <div class="signal-card" id="ai-direction-box">
-              <div class="signal-direction">
-                <span class="signal-label">PORTFOLIO REGIME</span>
-                <span class="signal-val text-success" id="ai-signal-text">BALANCED GROWTH</span>
-              </div>
-              <div class="signal-badge-side">
-                <span class="mono text-cyan" id="ai-forecast-ret">CAGR +120.98%</span>
-              </div>
-            </div>
 
-            <!-- Multi-Market Signal Grid -->
-            <div class="signal-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px;">
-              <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                <div style="font-size: 11px; color: var(--text-dim);">EURUSD (FX)</div>
-                <div style="font-size: 14px; font-weight: 700; color: #ff0055;">SELL (Short)</div>
-                <div style="font-size: 11px; font-family: monospace; color: var(--text-dim);">4-Yr Sharpe: 7.67</div>
-              </div>
-              <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                <div style="font-size: 11px; color: var(--text-dim);">XAGUSD (Silver)</div>
-                <div style="font-size: 14px; font-weight: 700; color: #00ff88;">BUY (Long)</div>
-                <div style="font-size: 11px; font-family: monospace; color: #00ff88;">Floating: +$18.15</div>
-              </div>
-              <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                <div style="font-size: 11px; color: var(--text-dim);">NAS100 (Nasdaq)</div>
-                <div style="font-size: 14px; font-weight: 700; color: #00ff88;">BUY (Long)</div>
-                <div style="font-size: 11px; font-family: monospace; color: #00ff88;">Floating: +$10.18</div>
-              </div>
-              <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                <div style="font-size: 11px; color: var(--text-dim);">WTI (Crude Oil)</div>
-                <div style="font-size: 14px; font-weight: 700; color: #ff0055;">SELL (Short)</div>
-                <div style="font-size: 11px; font-family: monospace; color: var(--text-dim);">4-Yr Sharpe: 16.10</div>
-              </div>
-            </div>
-
-            <!-- Guardrails Status Checklist -->
-            <div class="guardrails-list" style="margin-top: 14px;">
-              <div class="guardrail-item">
-                <span class="gr-check">✅</span>
-                <span class="gr-text"><strong>Rule A:</strong> Expanding temporal splits & stationarity</span>
-              </div>
-              <div class="guardrail-item">
-                <span class="gr-check">✅</span>
-                <span class="gr-text"><strong>Rule B:</strong> Dynamic ATR lot sizing & mandatory SL/TP</span>
-              </div>
-              <div class="guardrail-item">
-                <span class="gr-check">✅</span>
-                <span class="gr-text"><strong>Rule C:</strong> PyTorch Lightning isolated GPU inference</span>
-              </div>
-              <div class="guardrail-item">
-                <span class="gr-check">✅</span>
-                <span class="gr-text"><strong>Rule D:</strong> 50% Correlation discount & 1.5% DD halt</span>
-              </div>
-            </div>
-
+          <div class="table-responsive">
+            <table class="quant-table">
+              <thead>
+                <tr>
+                  <th>TICKET</th>
+                  <th>ASSET</th>
+                  <th>SIDE</th>
+                  <th>VOLUME</th>
+                  <th>ENTRY PRICE</th>
+                  <th>CURRENT</th>
+                  <th>EMERGENCY SL</th>
+                  <th>TARGET TP</th>
+                  <th>NET P&L ($)</th>
+                  <th>EXIT STRATEGY</th>
+                </tr>
+              </thead>
+              <tbody id="positions-body">
+                <tr>
+                  <td colspan="10" class="text-center py-4 text-dim">Scanning live MT5 open positions...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 
       </div>
 
-      <!-- Real-Time Institutional Execution Log -->
-      <section class="content-panel full-width">
-        <div class="panel-header">
-          <div class="panel-title-group">
-            <span class="panel-icon">⚡</span>
-            <h2>Autonomous Multi-Asset Execution Telemetry & MT5 Order Stream</h2>
-          </div>
-          <div class="panel-actions">
-            <span class="badge badge-dim mono">AUTO-SCROLL: ON</span>
-          </div>
-        </div>
+      <!-- Right Column: 23-Channel AI Intelligence & Macro Calendar -->
+      <div class="workspace-right">
         
-        <div class="log-terminal" id="log-terminal">
-          <div class="log-entry log-info">Connecting to autonomous execution stream...</div>
+        <!-- Macroeconomic Calendar Shield Widget -->
+        <section class="glass-panel macro-panel">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="panel-icon">🌍</span>
+              <div>
+                <h2 class="panel-title">Economic Calendar & News Shield</h2>
+                <span class="panel-subtitle">Tier-1 Macro Blackout (15m Pre / 30m Post) & Post-News Drift Pipeline</span>
+              </div>
+            </div>
+            <div id="shield-status-badge" class="badge badge-green">SHIELD IDLE (MARKET OPEN)</div>
+          </div>
+
+          <div class="macro-events-list" id="macro-events-list">
+            <div class="macro-loading text-dim text-center py-3">Connecting to Economic Calendar Engine...</div>
+          </div>
+        </section>
+
+        <!-- 23-Channel Neural Alpha Radar Matrix -->
+        <section class="glass-panel neural-panel">
+          <div class="panel-header">
+            <div class="header-left">
+              <span class="panel-icon">🧠</span>
+              <div>
+                <h2 class="panel-title">23-Channel Neural Alpha Radar</h2>
+                <span class="panel-subtitle">Multi-Horizon Attention & Conviction Gating (+/- 0.000300)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Multi-Asset Signal Tiles -->
+          <div class="signal-tiles-grid" id="signal-tiles-grid">
+            
+            <div class="signal-tile" id="tile-EURUSD">
+              <div class="tile-header">
+                <span class="tile-asset">EURUSD</span>
+                <span class="tile-tag">Forex Major</span>
+              </div>
+              <div class="tile-action text-coral" id="sig-action-EURUSD">SELL SHORT</div>
+              <div class="tile-forecast mono" id="sig-fcst-EURUSD">Forecast: -0.010116</div>
+              <div class="tile-confidence">
+                <div class="conf-bar"><div class="conf-fill bg-coral" style="width: 85%;"></div></div>
+                <span class="conf-text">High Conviction</span>
+              </div>
+            </div>
+
+            <div class="signal-tile" id="tile-NAS100">
+              <div class="tile-header">
+                <span class="tile-asset">NAS100</span>
+                <span class="tile-tag">Nasdaq Tech</span>
+              </div>
+              <div class="tile-action text-cyan" id="sig-action-NAS100">STANDBY (QUEUE)</div>
+              <div class="tile-forecast mono" id="sig-fcst-NAS100">Forecast: +0.001687</div>
+              <div class="tile-confidence">
+                <div class="conf-bar"><div class="conf-fill bg-cyan" style="width: 60%;"></div></div>
+                <span class="conf-text">Staggered Spacing</span>
+              </div>
+            </div>
+
+            <div class="signal-tile" id="tile-WTI">
+              <div class="tile-header">
+                <span class="tile-asset">WTI</span>
+                <span class="tile-tag">Crude Oil</span>
+              </div>
+              <div class="tile-action text-muted" id="sig-action-WTI">FLAT</div>
+              <div class="tile-forecast mono" id="sig-fcst-WTI">Forecast: +0.000120</div>
+              <div class="tile-confidence">
+                <div class="conf-bar"><div class="conf-fill bg-muted" style="width: 15%;"></div></div>
+                <span class="conf-text">Below Threshold</span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Rule Compliance Matrix -->
+          <div class="compliance-box">
+            <div class="compliance-title">INSTITUTIONAL QUANT GOVERNANCE</div>
+            <div class="compliance-grid">
+              <div class="comp-item"><span class="comp-dot green"></span> Rule A: Non-Leakage RevIN Normalization</div>
+              <div class="comp-item"><span class="comp-dot green"></span> Rule B: $14.81 Hard Dollar Ceiling (0.15%)</div>
+              <div class="comp-item"><span class="comp-dot green"></span> Rule C: Isolated 23-Channel Transformer</div>
+              <div class="comp-item"><span class="comp-dot green"></span> Rule D: Model-Driven Dynamic Signal Exits</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+
+    <!-- Real-Time Institutional Execution Stream Terminal -->
+    <section class="glass-panel console-panel">
+      <div class="panel-header">
+        <div class="header-left">
+          <span class="panel-icon">⚡</span>
+          <div>
+            <h2 class="panel-title">Real-Time Autonomous Execution Telemetry Stream</h2>
+            <span class="panel-subtitle">Live Stream from live_daemon.log & MetaTrader 5 Engine</span>
+          </div>
         </div>
-      </section>
+        <div class="console-controls">
+          <button class="filter-btn active" data-filter="all" onclick="filterLogs('all')">ALL</button>
+          <button class="filter-btn" data-filter="order" onclick="filterLogs('order')">ORDERS</button>
+          <button class="filter-btn" data-filter="win" onclick="filterLogs('win')">WINS / EXITS</button>
+          <button class="filter-btn" data-filter="shield" onclick="filterLogs('shield')">RISK SHIELD</button>
+          <span class="badge badge-dim mono ml-2">AUTO-SCROLL: ON</span>
+        </div>
+      </div>
+      
+      <div class="terminal-console" id="log-terminal">
+        <div class="log-line log-info">Connecting to AetherQuant live telemetry stream...</div>
+      </div>
+    </section>
 
-    </main>
-
-    <!-- Footer -->
+    <!-- Terminal Footer -->
     <footer class="app-footer">
-      <div class="footer-content">
-        <span>EA AI Quantitative Research & Autonomous Execution Engine</span>
-        <span class="footer-divider">&bull;</span>
-        <span>MetaTrader 5 API Python Connector</span>
-        <span class="footer-divider">&bull;</span>
-        <span>SOC 2 Compliance Engine &bull; Binding: 127.0.0.1:8000</span>
+      <div class="footer-inner">
+        <span class="footer-item">AetherQuant-MT5 Quantitative AI Engine</span>
+        <span class="footer-sep">&bull;</span>
+        <span class="footer-item">MetaTrader 5 Python Core</span>
+        <span class="footer-sep">&bull;</span>
+        <span class="footer-item">SOC 2 Local Loopback (127.0.0.1:8000)</span>
+        <span class="footer-sep">&bull;</span>
+        <span class="footer-item text-green">Telemetry Online &bull; 0.98% Max Drawdown</span>
       </div>
     </footer>
 

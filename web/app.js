@@ -1,22 +1,28 @@
-﻿/**
- * EA AI — Institutional Quantitative Live Terminal Frontend Controller
- * 100% Real MT5 Terminal & Daemon Telemetry
+/**
+ * AetherQuant-MT5 — SOTA Institutional Live Terminal Frontend Controller
+ * 100% Real MT5 Terminal & 23-Channel MacroSuperPatchTST Telemetry
  */
 
+let activeSymbol = "EURUSD";
 let priceChart = null;
-let lastLogCount = 0;
+let currentLogFilter = "all";
+let rawLogsCache = [];
 
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
   initChart();
+  
+  // Initial data fetches
   fetchTelemetry();
-  fetchBars();
+  fetchBars(activeSymbol);
+  fetchEconomicCalendar();
   fetchLogs();
 
-  // High-frequency telemetry polling every 1.5 seconds
+  // High-frequency live polling
   setInterval(fetchTelemetry, 1500);
+  setInterval(fetchEconomicCalendar, 30000);
   setInterval(fetchLogs, 2000);
-  setInterval(fetchBars, 15000);
+  setInterval(() => fetchBars(activeSymbol), 10000);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,49 +39,54 @@ function initClock() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. CHART INITIALIZATION
+// 2. CHART CONTROLLER (MULTI-ASSET READY)
 // ─────────────────────────────────────────────────────────────────────────────
 function initChart() {
   const ctx = document.getElementById("priceChart").getContext("2d");
   
+  const gradient = ctx.createLinearGradient(0, 0, 0, 280);
+  gradient.addColorStop(0, "rgba(0, 240, 255, 0.20)");
+  gradient.addColorStop(1, "rgba(0, 240, 255, 0.00)");
+
   priceChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: [],
       datasets: [
         {
-          label: "EURUSD H1 Close",
+          label: "H1 Close",
           data: [],
           borderColor: "#00f0ff",
-          backgroundColor: "rgba(0, 240, 255, 0.06)",
-          borderWidth: 2,
+          backgroundColor: gradient,
+          borderWidth: 2.2,
           pointRadius: 0,
-          pointHoverRadius: 4,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: "#00f0ff",
           fill: true,
-          tension: 0.15,
+          tension: 0.2,
         },
         {
-          label: "Entry Price",
+          label: "Active Entry",
           data: [],
-          borderColor: "rgba(255, 255, 255, 0.6)",
+          borderColor: "rgba(255, 255, 255, 0.7)",
           borderWidth: 1.5,
           borderDash: [4, 4],
           pointRadius: 0,
           fill: false,
         },
         {
-          label: "Hard Stop Loss",
+          label: "Emergency Disaster SL (2.5x ATR)",
           data: [],
-          borderColor: "rgba(255, 0, 85, 0.8)",
+          borderColor: "rgba(255, 51, 102, 0.85)",
           borderWidth: 1.5,
           borderDash: [3, 3],
           pointRadius: 0,
           fill: false,
         },
         {
-          label: "Hard Take Profit",
+          label: "Target Alpha TP",
           data: [],
-          borderColor: "rgba(0, 255, 136, 0.8)",
+          borderColor: "rgba(0, 255, 136, 0.85)",
           borderWidth: 1.5,
           borderDash: [3, 3],
           pointRadius: 0,
@@ -87,25 +98,28 @@ function initChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      interaction: {
+        mode: "index",
+        intersect: false,
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
-          mode: "index",
-          intersect: false,
-          backgroundColor: "rgba(13, 18, 29, 0.95)",
-          titleColor: "#8e9bb0",
-          bodyColor: "#f0f4f8",
-          borderColor: "rgba(255, 255, 255, 0.1)",
+          backgroundColor: "rgba(10, 15, 25, 0.95)",
+          titleColor: "#94a3b8",
+          bodyColor: "#f3f6fb",
+          borderColor: "rgba(255, 255, 255, 0.12)",
           borderWidth: 1,
           padding: 10,
-          bodyFont: { family: "JetBrains Mono" }
+          bodyFont: { family: "JetBrains Mono", size: 11 },
+          titleFont: { family: "Inter", size: 11 }
         }
       },
       scales: {
         x: {
           grid: { color: "rgba(255, 255, 255, 0.03)" },
           ticks: {
-            color: "#4e5d78",
+            color: "#475569",
             font: { family: "JetBrains Mono", size: 10 },
             maxTicksLimit: 8
           }
@@ -114,9 +128,9 @@ function initChart() {
           position: "right",
           grid: { color: "rgba(255, 255, 255, 0.03)" },
           ticks: {
-            color: "#8e9bb0",
+            color: "#94a3b8",
             font: { family: "JetBrains Mono", size: 10 },
-            callback: (val) => val.toFixed(5)
+            callback: (val) => val >= 100 ? val.toFixed(2) : val.toFixed(5)
           }
         }
       }
@@ -124,8 +138,67 @@ function initChart() {
   });
 }
 
+function switchAsset(symbol) {
+  activeSymbol = symbol;
+  
+  // Update Tab Styling
+  document.querySelectorAll(".asset-tab").forEach(tab => {
+    if (tab.getAttribute("data-symbol") === symbol) {
+      tab.classList.add("active");
+    } else {
+      tab.classList.remove("active");
+    }
+  });
+
+  document.getElementById("stat-symbol").textContent = symbol;
+  fetchBars(symbol);
+}
+
+async function fetchBars(symbol = "EURUSD") {
+  try {
+    const res = await fetch(`/api/bars?symbol=${encodeURIComponent(symbol)}&count=60`);
+    const data = await res.json();
+    const bars = data.bars || [];
+
+    if (bars.length === 0 || !priceChart) return;
+
+    const labels = bars.map(b => b.time ? b.time.substring(11, 16) : "");
+    const closes = bars.map(b => b.close);
+
+    const latest = bars[bars.length - 1];
+    document.getElementById("stat-price").textContent = latest.close >= 100 ? latest.close.toFixed(2) : latest.close.toFixed(5);
+    document.getElementById("stat-open").textContent = latest.open >= 100 ? latest.open.toFixed(2) : latest.open.toFixed(5);
+    document.getElementById("stat-high").textContent = latest.high >= 100 ? latest.high.toFixed(2) : latest.high.toFixed(5);
+    document.getElementById("stat-low").textContent = latest.low >= 100 ? latest.low.toFixed(2) : latest.low.toFixed(5);
+
+    priceChart.data.labels = labels;
+    priceChart.data.datasets[0].data = closes;
+    priceChart.data.datasets[0].label = `${symbol} H1 Close`;
+
+    // Check if open position exists for this symbol to draw SL/TP bands
+    const posRes = await fetch("/api/status");
+    const statusData = await posRes.json();
+    const openPositions = statusData.open_positions || [];
+    const activePos = openPositions.find(p => (p.symbol || "").toUpperCase().includes(symbol.toUpperCase()));
+
+    if (activePos && activePos.price_open) {
+      priceChart.data.datasets[1].data = new Array(closes.length).fill(activePos.price_open);
+      priceChart.data.datasets[2].data = new Array(closes.length).fill(activePos.sl);
+      priceChart.data.datasets[3].data = new Array(closes.length).fill(activePos.tp);
+    } else {
+      priceChart.data.datasets[1].data = [];
+      priceChart.data.datasets[2].data = [];
+      priceChart.data.datasets[3].data = [];
+    }
+
+    priceChart.update();
+  } catch (err) {
+    console.error("Error fetching bars:", err);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. FETCH TELEMETRY & UPDATE DOM
+// 3. TELEMETRY & DOM SYNC
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchTelemetry() {
   const startTime = performance.now();
@@ -136,148 +209,202 @@ async function fetchTelemetry() {
 
     document.getElementById("latency").textContent = `${latency}ms`;
 
-    // 1. Header & Account
+    // 1. Account & KPI Ribbon
     const acc = data.account || {};
     if (acc.login) {
       document.getElementById("account-id").textContent = `#${acc.login}`;
       document.getElementById("kpi-equity").textContent = `$${Number(acc.equity).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      document.getElementById("kpi-balance-sub").textContent = `Balance: $${Number(acc.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-      document.getElementById("kpi-margin-level").textContent = `${acc.margin_level > 9999 ? "10,000%" : acc.margin_level + "%"}`;
-      document.getElementById("kpi-free-margin").textContent = `Free Margin: $${Number(acc.free_margin).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      document.getElementById("kpi-balance-sub").textContent = `Balance: $${Number(acc.balance).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      document.getElementById("kpi-leverage").textContent = `1:${acc.leverage || 100} MT5`;
     }
 
     // 2. Open Positions Table
     const posList = data.open_positions || [];
-    const posBody = document.getElementById("positions-body");
-    const posCountEl = document.getElementById("pos-count");
-    posCountEl.textContent = `${posList.length} Open Position${posList.length === 1 ? "" : "s"}`;
+    const posBadge = document.getElementById("pos-count-badge");
+    posBadge.textContent = `${posList.length} Open ${posList.length === 1 ? "Position" : "Positions"}`;
 
-    let totalFloatingPnL = 0;
-    let totalPips = 0;
+    const tbody = document.getElementById("positions-body");
+    let totalFloating = 0.0;
 
     if (posList.length === 0) {
-      posBody.innerHTML = `<tr><td colspan="10" class="text-dim" style="text-align:center; padding: 24px;">No active positions open &bull; Daemon scanning market bars</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-dim">No active positions (Portfolio risk budget available: 0.60%).</td></tr>`;
+      document.getElementById("kpi-floating-pnl").textContent = "$0.00";
+      document.getElementById("kpi-floating-pnl").className = "kpi-main text-muted";
     } else {
       let rowsHtml = "";
       posList.forEach(p => {
-        totalFloatingPnL += p.profit;
-        totalPips += p.pips;
-
-        const isProfit = p.profit >= 0;
-        const pnlClass = isProfit ? "text-success" : "text-danger";
-        const typeClass = p.type === "BUY" ? "text-success" : "text-danger";
+        totalFloating += Number(p.profit || 0);
+        const isBuy = (p.type || "").toUpperCase() === "BUY";
+        const sideClass = isBuy ? "badge-green" : "badge-coral";
+        const pnlClass = p.profit >= 0 ? "text-success" : "text-coral";
+        const pnlSign = p.profit >= 0 ? "+" : "";
+        const isFx = (p.symbol || "").includes("EUR");
+        const dec = isFx ? 5 : 2;
 
         rowsHtml += `
           <tr>
-            <td class="mono font-bold">#${p.ticket}</td>
-            <td><strong>${p.symbol}</strong></td>
-            <td><span class="badge ${p.type === 'BUY' ? 'badge-success' : 'badge-live'}">${p.type}</span></td>
-            <td class="mono">${p.volume}</td>
-            <td class="mono">${p.price_open.toFixed(5)}</td>
-            <td class="mono font-bold">${p.price_current.toFixed(5)}</td>
-            <td class="mono text-danger">${p.sl.toFixed(5)}</td>
-            <td class="mono text-success">${p.tp.toFixed(5)}</td>
-            <td class="mono font-bold ${pnlClass}">${p.pips > 0 ? "+" : ""}${p.pips}</td>
-            <td class="mono font-bold ${pnlClass}">${p.profit >= 0 ? "+$" : "-$"}${Math.abs(p.profit).toFixed(2)}</td>
+            <td class="mono font-bold text-white">#${p.ticket}</td>
+            <td class="mono font-bold text-cyan">${p.symbol}</td>
+            <td><span class="badge ${sideClass}">${p.type}</span></td>
+            <td class="mono">${Number(p.volume).toFixed(2)}</td>
+            <td class="mono">${Number(p.price_open).toFixed(dec)}</td>
+            <td class="mono text-white">${Number(p.price_current).toFixed(dec)}</td>
+            <td class="mono text-coral">${Number(p.sl).toFixed(dec)}</td>
+            <td class="mono text-success">${Number(p.tp).toFixed(dec)}</td>
+            <td class="mono font-bold ${pnlClass}">${pnlSign}$${Number(p.profit).toFixed(2)}</td>
+            <td><span class="badge badge-ai">Model Dynamic Exit</span></td>
           </tr>
         `;
       });
-      posBody.innerHTML = rowsHtml;
+      tbody.innerHTML = rowsHtml;
+
+      const pnlSign = totalFloating >= 0 ? "+" : "";
+      const pnlEl = document.getElementById("kpi-floating-pnl");
+      pnlEl.textContent = `${pnlSign}$${totalFloating.toFixed(2)}`;
+      pnlEl.className = totalFloating >= 0 ? "kpi-main text-success" : "kpi-main text-coral";
     }
 
-    const pnlEl = document.getElementById("kpi-floating-pnl");
-    pnlEl.textContent = `${totalFloatingPnL >= 0 ? "+$" : "-$"}${Math.abs(totalFloatingPnL).toFixed(2)}`;
-    pnlEl.className = `kpi-value ${totalFloatingPnL >= 0 ? "text-success" : "text-danger"}`;
-    document.getElementById("kpi-floating-pips").textContent = `${totalPips > 0 ? "+" : ""}${totalPips.toFixed(1)} pips total`;
+    // 3. Performance & Closed Deals
+    const state = data.daemon_state || {};
+    const perf = state.performance || {};
+    const netPnl = perf.net_pnl_usd || 0;
+    const pnlTag = netPnl >= 0 ? `+$${netPnl.toFixed(2)}` : `-$${Math.abs(netPnl).toFixed(2)}`;
+    document.getElementById("kpi-closed-pnl").innerHTML = `Realized: <strong class="${netPnl >= 0 ? "text-success" : "text-coral"}">${pnlTag}</strong> (${perf.wins || 0}W / ${perf.losses || 0}L)`;
 
-    // 3. AI Intelligence & Daemon Decision
-    const daemon = data.daemon_state || {};
-    const dec = daemon.last_decision || {};
-
-    if (dec.signal) {
-      const sigBox = document.getElementById("ai-direction-box");
-      const sigText = document.getElementById("ai-signal-text");
-      sigText.textContent = dec.signal;
-
-      if (dec.signal === "BUY") {
-        sigBox.className = "signal-direction-box buy-box";
-      } else if (dec.signal === "SELL") {
-        sigBox.className = "signal-direction-box";
+    // 4. Update 23-Channel Signal Tiles
+    const sigs = state.signals || {};
+    ["EURUSD", "NAS100", "WTI"].forEach(sym => {
+      const sData = sigs[sym];
+      const actionEl = document.getElementById(`sig-action-${sym}`);
+      const fcstEl = document.getElementById(`sig-fcst-${sym}`);
+      if (sData && actionEl && fcstEl) {
+        const ret = sData.forecast_return || 0;
+        const sig = sData.signal || "FLAT";
+        fcstEl.textContent = `Forecast: ${ret >= 0 ? "+" : ""}${ret.toFixed(6)}`;
+        if (sig === "BUY") {
+          actionEl.textContent = "BUY (LONG)";
+          actionEl.className = "tile-action text-success";
+        } else if (sig === "SELL") {
+          actionEl.textContent = "SELL (SHORT)";
+          actionEl.className = "tile-action text-coral";
+        } else {
+          actionEl.textContent = "FLAT (NO SIGNAL)";
+          actionEl.className = "tile-action text-muted";
+        }
       }
-
-      document.getElementById("ai-forecast-val").textContent = `${dec.forecast_return > 0 ? "+" : ""}${dec.forecast_return.toFixed(6)}`;
-      document.getElementById("ai-sl-pts").textContent = `${dec.sl_points.toFixed(1)} pts (${(dec.sl_points / 10).toFixed(1)} pips)`;
-      document.getElementById("ai-tp-pts").textContent = `${dec.tp_points.toFixed(1)} pts (1:2 RR)`;
-      document.getElementById("ai-lot-size").textContent = `${dec.lot_size.toFixed(2)} Lots`;
-      document.getElementById("kpi-risk-dollar").textContent = `Max Risk: $${(acc.equity * (dec.risk_pct || 0.0025)).toFixed(2)} / trade`;
-    }
-
-    // Overlay active positions onto price chart if available
-    if (priceChart && posList.length > 0) {
-      const active = posList[0];
-      const count = priceChart.data.labels.length;
-      priceChart.data.datasets[1].data = Array(count).fill(active.price_open);
-      priceChart.data.datasets[2].data = Array(count).fill(active.sl);
-      priceChart.data.datasets[3].data = Array(count).fill(active.tp);
-      priceChart.update("none");
-    }
+    });
 
   } catch (err) {
-    console.error("Telemetry fetch error:", err);
+    console.error("Error in fetchTelemetry:", err);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. FETCH BARS FOR CANDLE/LINE CHART
+// 4. ECONOMIC CALENDAR PIPELINE
 // ─────────────────────────────────────────────────────────────────────────────
-async function fetchBars() {
+async function fetchEconomicCalendar() {
   try {
-    const res = await fetch("/api/bars?count=48");
+    const res = await fetch("/api/economic_calendar");
     const data = await res.json();
-    const bars = data.bars || [];
+    const events = data.events || [];
+    const isBlackout = data.is_blackout || false;
 
-    if (bars.length > 0 && priceChart) {
-      const labels = bars.map(b => b.time ? b.time.split(" ")[1]?.slice(0, 5) || b.time : "");
-      const closes = bars.map(b => b.close);
-
-      priceChart.data.labels = labels;
-      priceChart.data.datasets[0].data = closes;
-      priceChart.update();
+    const shieldBadge = document.getElementById("shield-status-badge");
+    if (isBlackout) {
+      shieldBadge.textContent = "🛑 NEWS BLACKOUT ACTIVE";
+      shieldBadge.className = "badge badge-coral";
+    } else {
+      shieldBadge.textContent = "🛡️ SHIELD IDLE (MARKET OPEN)";
+      shieldBadge.className = "badge badge-green";
     }
+
+    const container = document.getElementById("macro-events-list");
+    if (events.length === 0) {
+      container.innerHTML = `<div class="macro-loading text-dim text-center py-2">No Tier-1 releases scheduled in the next 72 hours.</div>`;
+      return;
+    }
+
+    let html = "";
+    events.forEach(ev => {
+      const isImminent = ev.hours_until <= 3.0;
+      const statusBadge = isImminent ? `<span class="badge badge-coral">T-${Math.max(0, ev.hours_until)}h</span>` : `<span class="badge badge-dim">in ${ev.hours_until}h</span>`;
+      html += `
+        <div class="macro-event-item">
+          <div class="event-left">
+            <span class="event-cur">${ev.currency}</span>
+            <span class="event-name">${ev.name}</span>
+          </div>
+          <div class="event-right">
+            ${statusBadge}
+            <span class="badge badge-amber">HIGH</span>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
   } catch (err) {
-    console.error("Bars fetch error:", err);
+    console.error("Error fetching economic calendar:", err);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. FETCH & STREAM TERMINAL LOGS
+// 5. LOG CONSOLE WITH FILTERS
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchLogs() {
   try {
-    const res = await fetch("/api/logs?lines=30");
+    const res = await fetch("/api/logs?lines=60");
     const data = await res.json();
-    const logs = data.logs || [];
-    const logBox = document.getElementById("terminal-logs");
-
-    if (logs.length > 0) {
-      let html = "";
-      logs.forEach(line => {
-        let cls = "log-line";
-        if (line.includes("[INFO]")) cls += " log-info";
-        if (line.includes("ORDER") || line.includes("LIVE") || line.includes("BUY") || line.includes("SELL")) cls += " log-trade";
-        if (line.includes("WARNING")) cls += " log-warn";
-        if (line.includes("ERROR")) cls += " log-err";
-
-        html += `<div class="${cls}">${escapeHtml(line)}</div>`;
-      });
-      logBox.innerHTML = html;
-      logBox.scrollTop = logBox.scrollHeight;
-    }
+    rawLogsCache = data.logs || [];
+    renderLogs();
   } catch (err) {
-    console.error("Logs fetch error:", err);
+    console.error("Error fetching logs:", err);
   }
 }
 
-function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function filterLogs(category) {
+  currentLogFilter = category;
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    if (btn.getAttribute("data-filter") === category) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+  renderLogs();
+}
+
+function renderLogs() {
+  const terminal = document.getElementById("log-terminal");
+  if (!terminal) return;
+
+  const filtered = rawLogsCache.filter(line => {
+    if (currentLogFilter === "all") return true;
+    if (currentLogFilter === "order") return line.includes("ORDER") || line.includes("send_market_order");
+    if (currentLogFilter === "win") return line.includes("WIN") || line.includes("DYNAMIC MODEL EXIT") || line.includes("CLOSED DEAL");
+    if (currentLogFilter === "shield") return line.includes("SHIELD") || line.includes("COOLDOWN") || line.includes("FREEZE") || line.includes("Blocked");
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    terminal.innerHTML = `<div class="log-line text-dim">No log events found for category: ${currentLogFilter.toUpperCase()}</div>`;
+    return;
+  }
+
+  terminal.innerHTML = filtered.map(line => {
+    let cls = "log-line";
+    if (line.includes("WIN") || line.includes("🎉")) cls += " log-win";
+    else if (line.includes("LOSS") || line.includes("🛑")) cls += " log-loss";
+    else if (line.includes("ORDER") || line.includes("🚀")) cls += " log-order";
+    else if (line.includes("COOLDOWN") || line.includes("FREEZE") || line.includes("Blocked")) cls += " log-shield";
+    else if (line.includes("DYNAMIC MODEL EXIT") || line.includes("🎯")) cls += " log-exit";
+    return `<div class="${cls}">${escapeHtml(line)}</div>`;
+  }).join("");
+
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
 }

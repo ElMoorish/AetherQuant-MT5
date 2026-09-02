@@ -1,4 +1,4 @@
-﻿"""
+"""
 SOC 2 Compliant Real-Time Institutional Dashboard Server
 =========================================================
 Features:
@@ -10,7 +10,7 @@ Features:
 """
 import sys, os, json, time, logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -189,6 +189,10 @@ def get_live_market_telemetry() -> Dict[str, Any]:
     }
 
 
+from skills.mt5_execution.scripts.economic_calendar import EconomicCalendarEngine
+calendar_engine = EconomicCalendarEngine()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. REST API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,25 +203,67 @@ async def api_status():
 
 
 @app.get("/api/bars")
-async def api_bars(count: int = 50):
-    """Returns real-time OHLCV bars for EURUSD directly from MT5."""
+async def api_bars(symbol: str = "EURUSD", count: int = 60):
+    """Returns real-time OHLCV bars for the requested symbol directly from MT5."""
     if not mt5_client.connected:
         mt5_client.connect()
 
-    count = min(max(count, 10), 150)
-    rates = mt5_client.get_rates(symbol="EURUSD", timeframe="H1", count=count)
+    count = min(max(count, 10), 200)
+    res_sym = mt5_client._resolve_symbol(symbol)
+    rates = mt5_client.get_rates(symbol=res_sym, timeframe="H1", count=count)
     bars_list = []
     if len(rates) > 0 and "close" in rates:
+        is_fx = "EUR" in symbol.upper()
         for _, row in rates.iterrows():
             bars_list.append({
                 "time": str(row["time"]) if "time" in row else "",
-                "open": round(float(row["open"]), 5),
-                "high": round(float(row["high"]), 5),
-                "low": round(float(row["low"]), 5),
-                "close": round(float(row["close"]), 5),
+                "open": round(float(row["open"]), 5 if is_fx else 2),
+                "high": round(float(row["high"]), 5 if is_fx else 2),
+                "low": round(float(row["low"]), 5 if is_fx else 2),
+                "close": round(float(row["close"]), 5 if is_fx else 2),
                 "volume": int(row.get("tick_volume", 0)),
             })
-    return JSONResponse(content={"symbol": "EURUSD", "timeframe": "H1", "bars": bars_list})
+    return JSONResponse(content={"symbol": symbol, "res_symbol": res_sym, "timeframe": "H1", "bars": bars_list})
+
+
+@app.get("/api/economic_calendar")
+async def api_economic_calendar():
+    """Returns upcoming and recent Tier-1 macroeconomic events."""
+    now = datetime.now(timezone.utc)
+    ev_df = calendar_engine.events_df.copy()
+    
+    if ev_df["datetime"].dt.tz is None:
+        ev_df["datetime"] = ev_df["datetime"].dt.tz_localize("UTC")
+        
+    upcoming = ev_df[ev_df["datetime"] >= now]
+    is_blackout, active_event = calendar_engine.is_news_blackout(now)
+    
+    events = []
+    seen_names = set()
+    for _, row in upcoming.iterrows():
+        ev_name = row["event"]
+        if ev_name in seen_names:
+            continue
+        seen_names.add(ev_name)
+        dt = row["datetime"]
+        diff_hours = (dt - now).total_seconds() / 3600.0
+        events.append({
+            "name": ev_name,
+            "currency": row["currency"],
+            "impact": row["impact"],
+            "datetime": dt.isoformat(),
+            "hours_until": max(0.0, round(diff_hours, 1)),
+            "status": "IMMINENT" if diff_hours < 3.0 else "SCHEDULED",
+        })
+        if len(events) >= 5:
+            break
+    return JSONResponse(content={
+        "is_blackout": is_blackout,
+        "active_event": active_event,
+        "events": events,
+    })
+
+
 
 
 @app.get("/api/logs")
