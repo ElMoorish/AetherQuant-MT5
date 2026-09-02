@@ -82,6 +82,14 @@ logging.basicConfig(
 logger = logging.getLogger("MultiAssetDaemon")
 
 
+def find_latest_macro_ckpt() -> str:
+    ckpt_dir = ROOT / "checkpoints/macro_super_patchtst"
+    ckpts = list(ckpt_dir.glob("*.ckpt"))
+    if ckpts:
+        return str(sorted(ckpts, key=os.path.getmtime)[-1])
+    return str(ROOT / "checkpoints/macro_super_patchtst/best_macro_patchtst_epoch=epoch=09_val_loss=val_loss=-0.0695.ckpt")
+
+
 class MultiAssetTradingDaemon:
     """
     Autonomous Concurrent Multi-Asset Execution Daemon with Balanced Growth Risk Controls.
@@ -94,14 +102,14 @@ class MultiAssetTradingDaemon:
         mode: str = "live-demo",
         base_risk_pct: float = 0.0015,
         max_portfolio_risk_pct: float = 0.0060,
-        checkpoint_path: str = DEFAULT_CKPT,
+        checkpoint_path: Optional[str] = None,
         magic_number: int = 10101,
     ):
         self.symbols = [s.upper() for s in (symbols or ["EURUSD", "NAS100", "WTI"])]
         self.timeframe = timeframe.upper()
         self.mode = mode.lower()
         self.base_risk_pct = base_risk_pct
-        self.checkpoint_path = checkpoint_path
+        self.checkpoint_path = checkpoint_path or find_latest_macro_ckpt()
         self.magic_number = magic_number
 
         self.client = MT5Client()
@@ -193,10 +201,8 @@ class MultiAssetTradingDaemon:
         return connected
 
     def load_model(self) -> bool:
-        if not os.path.exists(self.checkpoint_path):
-            logger.warning(f"Checkpoint not found at {self.checkpoint_path}. Falling back.")
-            fallback = str(ROOT / "checkpoints/macro_super_patchtst/best_macro_patchtst_epoch=epoch=09_val_loss=val_loss=-0.0704.ckpt")
-            self.checkpoint_path = fallback
+        if not self.checkpoint_path or not os.path.exists(self.checkpoint_path):
+            self.checkpoint_path = find_latest_macro_ckpt()
 
         try:
             self.model = MacroSuperPatchTST.load_from_checkpoint(

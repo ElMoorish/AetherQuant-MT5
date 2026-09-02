@@ -43,48 +43,38 @@ ALL_23_FEATURES = ALPHA_FEATURES + MACRO_FEATURES
 def engineer_23_macro_alpha_features(h1_df: pd.DataFrame, h4_df: pd.DataFrame, calendar: EconomicCalendarEngine) -> pd.DataFrame:
     """Computes the 19 standard alpha features + 4 stationary macroeconomic calendar features."""
     df = engineer_18_alpha_features(h1_df, h4_df)
-    times = pd.to_datetime(df["time"])
+    times = pd.to_datetime(df["time"], utc=True)
     
-    events_df = calendar.events_df
-    ev_times = events_df["datetime"].values
+    events_df = calendar.events_df.copy()
+    ev_times = pd.to_datetime(events_df["datetime"], utc=True).sort_values().values
 
-    h_to_next = np.zeros(len(df), dtype=np.float32)
-    h_since_prev = np.zeros(len(df), dtype=np.float32)
-    compression = np.zeros(len(df), dtype=np.float32)
-    drift_mom = np.zeros(len(df), dtype=np.float32)
+    n = len(df)
+    log_rets = df["log_return"].values.astype(np.float32)
+    t_vals = times.values
 
-    log_rets = df["log_return"].values
+    # Vectorized binary search across all 661 macro events
+    idx_next = np.searchsorted(ev_times, t_vals, side="right")
+    idx_prev = np.searchsorted(ev_times, t_vals, side="right") - 1
 
-    for i in range(len(df)):
-        t = times.iloc[i]
-        
-        # Future events
-        future_mask = ev_times > t
-        if np.any(future_mask):
-            next_t = ev_times[future_mask][0]
-            dt_next_hours = (next_t - t).total_seconds() / 3600.0
-        else:
-            dt_next_hours = 48.0
+    # Next upcoming events
+    valid_next = idx_next < len(ev_times)
+    dt_next_hours = np.full(n, 48.0, dtype=np.float32)
+    if np.any(valid_next):
+        dt_next_hours[valid_next] = (ev_times[idx_next[valid_next]] - t_vals[valid_next]) / np.timedelta64(1, "h")
+    
+    # Preceding events
+    valid_prev = idx_prev >= 0
+    dt_prev_hours = np.full(n, 48.0, dtype=np.float32)
+    if np.any(valid_prev):
+        dt_prev_hours[valid_prev] = (t_vals[valid_prev] - ev_times[idx_prev[valid_prev]]) / np.timedelta64(1, "h")
 
-        # Past events
-        past_mask = ev_times <= t
-        if np.any(past_mask):
-            prev_t = ev_times[past_mask][-1]
-            dt_prev_hours = (t - prev_t).total_seconds() / 3600.0
-        else:
-            dt_prev_hours = 48.0
-
-        h_to_next[i] = min(dt_next_hours, 24.0) / 24.0
-        h_since_prev[i] = min(dt_prev_hours, 24.0) / 24.0
-        compression[i] = np.exp(-dt_next_hours / 6.0)
-        drift_mom[i] = np.exp(-dt_prev_hours / 12.0) * log_rets[i]
-
-    df["hours_to_next_tier1"] = h_to_next
-    df["hours_since_last_tier1"] = h_since_prev
-    df["pre_news_compression_score"] = compression
-    df["post_news_drift_momentum"] = drift_mom
+    df["hours_to_next_tier1"] = (np.clip(dt_next_hours, 0.0, 24.0) / 24.0).astype(np.float32)
+    df["hours_since_last_tier1"] = (np.clip(dt_prev_hours, 0.0, 24.0) / 24.0).astype(np.float32)
+    df["pre_news_compression_score"] = np.exp(-dt_next_hours / 6.0).astype(np.float32)
+    df["post_news_drift_momentum"] = (np.exp(-dt_prev_hours / 12.0) * log_rets).astype(np.float32)
 
     return df
+
 
 
 class MacroSuperPatchTST(pl.LightningModule):
