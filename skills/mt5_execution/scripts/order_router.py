@@ -1,4 +1,4 @@
-﻿"""
+"""
 Order Router & Execution Engine (Precision Routing Edition)
 ============================================================
 Enforces Rule B guardrails: Mandatory hard Stop Loss (SL) and Take Profit (TP),
@@ -284,3 +284,50 @@ class OrderRouter:
                     return True
 
         return False
+
+    def close_position(self, ticket: int) -> Dict[str, Any]:
+        """
+        Closes an open position at the current market price with retry handling.
+        """
+        if not MT5_AVAILABLE or not self.client.connected:
+            return {"retcode": 10009, "comment": f"MOCK_CLOSED ticket {ticket}"}
+
+        positions = mt5.positions_get(ticket=ticket)
+        if not positions or len(positions) == 0:
+            return {"retcode": -1, "error": f"Position ticket {ticket} not found."}
+
+        pos = positions[0]
+        sym_info = self.client.get_symbol_info(pos.symbol)
+        tick = mt5.symbol_info_tick(pos.symbol)
+        if not tick or not sym_info:
+            return {"retcode": -1, "error": f"Symbol or tick unavailable for {pos.symbol}"}
+
+        order_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.POSITION_TYPE_BUY else mt5.ORDER_TYPE_BUY
+        price = tick.bid if pos.type == mt5.POSITION_TYPE_BUY else tick.ask
+
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "position": ticket,
+            "symbol": pos.symbol,
+            "volume": pos.volume,
+            "type": order_type,
+            "price": price,
+            "deviation": 20,
+            "magic": pos.magic,
+            "comment": "MODEL_DYNAMIC_EXIT",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+        for attempt in range(1, self.max_retries + 1):
+            result = mt5.order_send(request)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"Position #{ticket} ({pos.symbol}) closed successfully @ {price:.5f}")
+                return {"retcode": 10009, "deal": result.deal, "order": result.order}
+            else:
+                comment = result.comment if result else "None"
+                logger.warning(f"[Attempt {attempt}/{self.max_retries}] Close failed: {comment}. Retrying...")
+                time.sleep(self.retry_delay_sec)
+
+        return {"retcode": -1, "error": f"Failed to close position #{ticket}"}
+

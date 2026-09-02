@@ -277,7 +277,38 @@ class MultiAssetTradingDaemon:
         # Check existing positions for this symbol
         active_for_sym = [p for p in open_positions if self.portfolio_ctrl.clean_symbol(p["symbol"]) == symbol]
 
-        if signal_type != "FLAT" and not active_for_sym:
+        # 1. Dynamic Model-Driven Position Management for Active Trades
+        if active_for_sym:
+            for pos in active_for_sym:
+                pos_type = pos["type"]
+                ticket = pos["ticket"]
+                profit = pos.get("profit", 0.0)
+                
+                should_close = False
+                close_reason = ""
+                
+                # Rule A: Forecast Direction Reversal (Model detects trend has ended/flipped)
+                if pos_type == "BUY" and mean_pred < -0.00010:
+                    should_close = True
+                    close_reason = f"FORECAST_REVERSED_BEARISH (Forecast: {mean_pred:+.6f})"
+                elif pos_type == "SELL" and mean_pred > 0.00010:
+                    should_close = True
+                    close_reason = f"FORECAST_REVERSED_BULLISH (Forecast: {mean_pred:+.6f})"
+                
+                # Rule B: Alpha Target Captured (+2.0R profit capture)
+                if profit >= (equity * self.base_risk_pct * 2.0):
+                    should_close = True
+                    close_reason = f"ALPHA_TARGET_CAPTURED (+${profit:.2f})"
+
+                if should_close:
+                    if self.mode == "live-demo" and self.client.connected:
+                        close_res = self.router.close_position(ticket)
+                        logger.info(f"🎯 DYNAMIC MODEL EXIT: Closed {pos_type} on {symbol} (Ticket #{ticket}) | Reason: {close_reason} | PnL: ${profit:.2f}")
+                    else:
+                        logger.info(f"[PAPER] Dynamic exit for {symbol} | Reason: {close_reason} | PnL: ${profit:.2f}")
+
+        # 2. Evaluate New High-Conviction Entries
+        elif signal_type != "FLAT":
             # Evaluate Portfolio Risk Controller with Precision Safeguards & News Shield
             risk_decision = self.portfolio_ctrl.calculate_permitted_risk(
                 candidate_symbol=res_sym,
@@ -292,13 +323,14 @@ class MultiAssetTradingDaemon:
 
             if risk_decision["permitted"]:
                 auth_risk_pct = risk_decision["risk_pct"]
-                raw_sl_pts = self.risk_mgr.calculate_atr_stop_distance(res_sym, self.timeframe, atr_period=14)
+                # 2.5x ATR Disaster Emergency Stop Loss (Allows room for macro move, primary exit is dynamic model)
+                raw_sl_pts = self.risk_mgr.calculate_atr_stop_distance(res_sym, self.timeframe, atr_period=14) * 2.5
                 
                 # Sizing with Hard Dollar-Risk Ceiling
                 lot_size, effective_sl_pts = self.risk_mgr.calculate_lot_size_and_sl(
                     res_sym, sl_points=raw_sl_pts, risk_pct=auth_risk_pct, account_equity=equity
                 )
-                tp_points = effective_sl_pts * 2.5
+                tp_points = effective_sl_pts * 2.0
 
                 decision["lot_size"] = lot_size
                 decision["sl_points"] = effective_sl_pts
@@ -319,7 +351,7 @@ class MultiAssetTradingDaemon:
                     self.portfolio_ctrl.last_entry_time = datetime.now(timezone.utc).replace(tzinfo=None)
                     logger.info(
                         f"🚀 HIGH-CONVICTION LIVE ORDER: {signal_type} {lot_size} {symbol} | "
-                        f"Forecast: {mean_pred:+.6f} | SL: {effective_sl_pts}pts | Ticket: {exec_res.get('order')}"
+                        f"Forecast: {mean_pred:+.6f} | Emergency SL: {effective_sl_pts}pts | Ticket: {exec_res.get('order')}"
                     )
                 else:
                     decision["execution"] = {"mode": "PAPER", "status": "SIMULATED", "action": signal_type, "volume": lot_size}
