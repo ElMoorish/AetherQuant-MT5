@@ -235,7 +235,7 @@ async def api_economic_calendar():
     if ev_df["datetime"].dt.tz is None:
         ev_df["datetime"] = ev_df["datetime"].dt.tz_localize("UTC")
         
-    upcoming = ev_df[ev_df["datetime"] >= now]
+    upcoming = ev_df[ev_df["datetime"] >= now].sort_values("datetime")
     is_blackout, active_event = calendar_engine.is_news_blackout(now)
     
     events = []
@@ -250,12 +250,12 @@ async def api_economic_calendar():
         events.append({
             "name": ev_name,
             "currency": row["currency"],
-            "impact": row["impact"],
+            "impact": row.get("impact", 2),
             "datetime": dt.isoformat(),
             "hours_until": max(0.0, round(diff_hours, 1)),
             "status": "IMMINENT" if diff_hours < 3.0 else "SCHEDULED",
         })
-        if len(events) >= 5:
+        if len(events) >= 6:
             break
     return JSONResponse(content={
         "is_blackout": is_blackout,

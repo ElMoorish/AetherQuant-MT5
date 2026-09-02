@@ -328,15 +328,19 @@ async function fetchEconomicCalendar() {
     events.forEach(ev => {
       const isImminent = ev.hours_until <= 3.0;
       const statusBadge = isImminent ? `<span class="badge badge-coral">T-${Math.max(0, ev.hours_until)}h</span>` : `<span class="badge badge-dim">in ${ev.hours_until}h</span>`;
+      const cleanName = ev.name.replace(/^(USD|EUR|GBP)\s+/, "");
+      const impactClass = ev.impact === 3 ? "badge-coral" : "badge-amber";
+      const impactText = ev.impact === 3 ? "HIGH" : "MED";
+
       html += `
         <div class="macro-event-item">
           <div class="event-left">
             <span class="event-cur">${ev.currency}</span>
-            <span class="event-name">${ev.name}</span>
+            <span class="event-name">${cleanName}</span>
           </div>
           <div class="event-right">
             ${statusBadge}
-            <span class="badge badge-amber">HIGH</span>
+            <span class="badge ${impactClass}">${impactText}</span>
           </div>
         </div>
       `;

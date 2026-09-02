@@ -1,14 +1,19 @@
-﻿"""
-Economic Calendar Engine & High-Impact Macro News Shield
-=========================================================
-Manages Tier-1 Macroeconomic Event schedules (FOMC, NFP, CPI, GDP, ECB, PPI, Retail Sales)
-for USD, EUR, and global commodity drivers across 2022-2026 historical backtests and live execution.
+"""
+Economic Calendar Engine & High-Impact Macro News Shield (Live API Integrated)
+==============================================================================
+Real-time integration with global macroeconomic feeds (ForexFactory / Institutional Macro Feeds)
+tracking all High and Medium Tier-1 releases:
+- US Non-Farm Payrolls (NFP), ADP Employment Change, Unemployment Claims
+- US CPI, Core CPI, PCE Price Index
+- ISM Services PMI, ISM Manufacturing PMI, S&P Global Services PMI
+- FOMC Rate Decisions, Fed Chair Powell Speeches, ECB Rate Decisions
+- US GDP Growth Rate, JOLTS Job Openings, EIA Crude Oil Inventories
 
 Rules:
   A -- Zero forward leakage; calendar event timestamps strictly aligned to real release time
   B -- Hard News Blackout Shield (Pre-news freeze & post-news drift gating)
 """
-import os, sys, json, logging
+import os, sys, json, logging, urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -17,40 +22,75 @@ import numpy as np
 
 logger = logging.getLogger("EconomicCalendar")
 
-TIER1_EVENT_TYPES = [
-    "FOMC Interest Rate Decision",
-    "US Non-Farm Payrolls (NFP)",
-    "US CPI Inflation Rate (MoM/YoY)",
-    "US Core CPI",
-    "US GDP Growth Rate",
-    "ECB Interest Rate Decision",
-    "US Retail Sales",
-    "US ISM Manufacturing PMI",
-    "Fed Chair Powell Speech"
+HIGH_IMPACT_KEYWORDS = [
+    "non-farm", "nfp", "adp", "cpi", "pce", "fomc", "interest rate", "rate decision",
+    "unemployment", "jobless claims", "ism services", "ism manufacturing", "pmi",
+    "gdp", "retail sales", "powell", "lagarde", "crude oil inventories", "jolts"
 ]
 
 class EconomicCalendarEngine:
     """
-    Engine to detect high-impact news releases and compute news proximity features.
+    Real-time continuous Economic Calendar Engine for AI features and News Shield defense.
     """
 
     def __init__(self, data_cache_file: Optional[Path] = None):
         self.cache_file = data_cache_file or (Path(__file__).parent / "economic_events_cache.json")
         self.events_df = self._load_or_generate_calendar_dataset()
+        self._refresh_live_feed()
+
+    def _refresh_live_feed(self) -> None:
+        """Fetches live real-time weekly releases from live institutional feed."""
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        try:
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                new_events = []
+                for ev in data:
+                    country = ev.get("country", "")
+                    impact = ev.get("impact", "")
+                    title = ev.get("title", "")
+                    
+                    if country in ["USD", "EUR"] and impact in ["High", "Medium", "Holiday"]:
+                        # Parse ISO date with timezone
+                        dt_str = ev.get("date", "")
+                        if dt_str:
+                            dt = datetime.fromisoformat(dt_str).astimezone(timezone.utc)
+                            new_events.append({
+                                "datetime": dt.isoformat(),
+                                "event": f"{country} {title}",
+                                "currency": country,
+                                "impact": 3 if impact == "High" else 2,
+                                "forecast": ev.get("forecast", ""),
+                                "previous": ev.get("previous", "")
+                            })
+                
+                if new_events:
+                    live_df = pd.DataFrame(new_events)
+                    live_df["datetime"] = pd.to_datetime(live_df["datetime"])
+                    
+                    combined = pd.concat([self.events_df, live_df], ignore_index=True)
+                    combined["datetime"] = pd.to_datetime(combined["datetime"], utc=True)
+                    combined.drop_duplicates(subset=["datetime", "event"], keep="last", inplace=True)
+                    combined.sort_values("datetime", inplace=True)
+                    combined.reset_index(drop=True, inplace=True)
+                    self.events_df = combined
+                    logger.info(f"🟢 Ingested {len(new_events)} live real-time macro events from Global Calendar Feed!")
+        except Exception as e:
+            logger.debug(f"Live calendar feed check completed (fallback to cache): {e}")
 
     def _load_or_generate_calendar_dataset(self) -> pd.DataFrame:
-        """Loads cached event timestamps or generates recurring Tier-1 macro calendar (2022-2026)."""
+        """Loads cached event timestamps or generates comprehensive historical calendar (2022-2026)."""
         if self.cache_file.exists():
             try:
                 with open(self.cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 df = pd.DataFrame(data)
-                df["datetime"] = pd.to_datetime(df["datetime"])
+                df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
                 return df
             except Exception as e:
-                logger.warning(f"Failed to load cache: {e}, regenerating synthetic historical calendar...")
+                logger.warning(f"Failed to load cache: {e}, generating comprehensive historical calendar...")
 
-        # Generate institutional Tier-1 schedule from 2022 to 2026
         events = []
         start_dt = datetime(2022, 1, 1, tzinfo=timezone.utc)
         end_dt = datetime(2026, 12, 31, tzinfo=timezone.utc)
@@ -58,35 +98,46 @@ class EconomicCalendarEngine:
         cur = start_dt
         while cur <= end_dt:
             year, month = cur.year, cur.month
-
-            # 1. Non-Farm Payrolls (NFP) - 1st Friday of the month at 13:30 UTC
             first_day = datetime(year, month, 1, tzinfo=timezone.utc)
-            # Friday is weekday 4
+
+            # 1. ADP Employment - 1st Wednesday at 12:15 UTC
+            days_to_wed = (2 - first_day.weekday()) % 7
+            adp_dt = first_day + timedelta(days=days_to_wed, hours=12, minutes=15)
+            events.append({"datetime": adp_dt.isoformat(), "event": "USD ADP Non-Farm Employment Change", "currency": "USD", "impact": 2})
+
+            # 2. Non-Farm Payrolls (NFP) - 1st Friday of the month at 12:30 / 13:30 UTC
             days_to_fri = (4 - first_day.weekday()) % 7
-            nfp_dt = first_day + timedelta(days=days_to_fri, hours=13, minutes=30)
-            events.append({"datetime": nfp_dt.isoformat(), "event": "US Non-Farm Payrolls (NFP)", "currency": "USD", "impact": 3})
+            nfp_dt = first_day + timedelta(days=days_to_fri, hours=12, minutes=30)
+            events.append({"datetime": nfp_dt.isoformat(), "event": "USD Non-Farm Employment Change (NFP)", "currency": "USD", "impact": 3})
+            events.append({"datetime": nfp_dt.isoformat(), "event": "USD Unemployment Rate", "currency": "USD", "impact": 3})
 
-            # 2. US CPI Inflation - 2nd Wednesday of the month at 13:30 UTC
-            cpi_dt = first_day + timedelta(days=((2 - first_day.weekday()) % 7) + 7, hours=13, minutes=30)
-            events.append({"datetime": cpi_dt.isoformat(), "event": "US CPI Inflation", "currency": "USD", "impact": 3})
+            # 3. US CPI Inflation - 2nd Wednesday of the month at 12:30 UTC
+            cpi_dt = first_day + timedelta(days=days_to_wed + 7, hours=12, minutes=30)
+            events.append({"datetime": cpi_dt.isoformat(), "event": "USD CPI Inflation Rate", "currency": "USD", "impact": 3})
 
-            # 3. FOMC Rate Decision - Every ~6 weeks (mid/end of month Wednesdays at 19:00 UTC)
+            # 4. Weekly Initial Jobless Claims - Every Thursday at 12:30 UTC
+            days_to_thu = (3 - first_day.weekday()) % 7
+            thu = first_day + timedelta(days=days_to_thu, hours=12, minutes=30)
+            while thu.month == month:
+                events.append({"datetime": thu.isoformat(), "event": "USD Unemployment Claims", "currency": "USD", "impact": 2})
+                thu += timedelta(days=7)
+
+            # 5. ISM Services PMI & Manufacturing PMI - 1st & 3rd business days at 14:00 UTC
+            ism_mfg = first_day + timedelta(days=1, hours=14, minutes=0)
+            ism_serv = first_day + timedelta(days=3, hours=14, minutes=0)
+            events.append({"datetime": ism_mfg.isoformat(), "event": "USD ISM Manufacturing PMI", "currency": "USD", "impact": 3})
+            events.append({"datetime": ism_serv.isoformat(), "event": "USD ISM Services PMI", "currency": "USD", "impact": 2})
+
+            # 6. FOMC Rate Decision - (mid/end of month Wednesdays at 18:00/19:00 UTC)
             if month in [1, 3, 5, 6, 7, 9, 11, 12]:
-                fomc_dt = datetime(year, month, min(14 + ((2 - datetime(year, month, 14).weekday()) % 7), 28), 19, 0, tzinfo=timezone.utc)
-                events.append({"datetime": fomc_dt.isoformat(), "event": "FOMC Rate Decision", "currency": "USD", "impact": 3})
-
-            # 4. US Retail Sales & PPI - 15th of the month at 13:30 UTC
-            retail_dt = datetime(year, month, 15, 13, 30, tzinfo=timezone.utc)
-            events.append({"datetime": retail_dt.isoformat(), "event": "US Retail Sales", "currency": "USD", "impact": 3})
+                fomc_dt = datetime(year, month, min(14 + ((2 - datetime(year, month, 14).weekday()) % 7), 28), 18, 0, tzinfo=timezone.utc)
+                events.append({"datetime": fomc_dt.isoformat(), "event": "USD FOMC Rate Decision & Powell Speech", "currency": "USD", "impact": 3})
 
             # Advance to next month
-            if month == 12:
-                cur = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-            else:
-                cur = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+            cur = datetime(year + 1, 1, 1, tzinfo=timezone.utc) if month == 12 else datetime(year, month + 1, 1, tzinfo=timezone.utc)
 
         df = pd.DataFrame(events)
-        df["datetime"] = pd.to_datetime(df["datetime"])
+        df["datetime"] = pd.to_datetime(df["datetime"], utc=True)
         df.sort_values("datetime", inplace=True)
         df.reset_index(drop=True, inplace=True)
 
@@ -108,10 +159,13 @@ class EconomicCalendarEngine:
         t_min = current_dt - timedelta(minutes=post_window_min)
         t_max = current_dt + timedelta(minutes=pre_window_min)
 
-        sub = self.events_df[(self.events_df["datetime"] >= t_min) & (self.events_df["datetime"] <= t_max)]
+        ev_times = self.events_df["datetime"]
+        sub = self.events_df[(ev_times >= t_min) & (ev_times <= t_max)]
         if len(sub) > 0:
             ev = sub.iloc[0]
-            return True, f"{ev['event']} ({ev['datetime'].strftime('%H:%M')} UTC)"
+            dt_val = ev["datetime"]
+            time_str = dt_val.strftime("%H:%M") if hasattr(dt_val, "strftime") else str(dt_val)
+            return True, f"{ev['event']} ({time_str} UTC)"
         return False, None
 
     def compute_news_proximity_feature(self, timestamps: pd.Series) -> np.ndarray:
@@ -119,19 +173,12 @@ class EconomicCalendarEngine:
         Computes continuous news proximity feature in [0, 1]:
         proximity = exp(- Delta_t / 4.0) where Delta_t is hours until next Tier-1 news.
         """
-        ts = pd.to_datetime(timestamps)
-        if ts.dt.tz is None:
-            ts = ts.dt.tz_localize("UTC")
-
-        event_times = self.events_df["datetime"].values
-
+        ts = pd.to_datetime(timestamps, utc=True)
         proximities = []
         for t in ts:
-            # Find next event
             future_events = self.events_df[self.events_df["datetime"] >= t]
             if len(future_events) > 0:
                 delta_hours = (future_events.iloc[0]["datetime"] - t).total_seconds() / 3600.0
-                # Exponential proximity: peaks at 1.0 when news is here, decays to 0.0 at 12+ hours
                 prox = np.exp(-delta_hours / 4.0)
             else:
                 prox = 0.0
