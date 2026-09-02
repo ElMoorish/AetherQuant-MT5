@@ -46,7 +46,12 @@ from skills.mt5_execution.scripts.mt5_client import MT5Client
 from skills.mt5_execution.scripts.risk_manager import RiskManager
 from skills.mt5_execution.scripts.order_router import OrderRouter
 from skills.mt5_execution.scripts.portfolio_risk_controller import PortfolioRiskController
-from scripts.train_super_alpha_model import SuperPatchTST, engineer_18_alpha_features, ALPHA_FEATURES
+from skills.mt5_execution.scripts.economic_calendar import EconomicCalendarEngine
+from scripts.train_macro_super_patchtst import (
+    MacroSuperPatchTST,
+    engineer_23_macro_alpha_features,
+    ALL_23_FEATURES
+)
 
 try:
     import MetaTrader5 as mt5
@@ -57,7 +62,7 @@ except ImportError:
 
 LOG_FILE = ROOT / "scripts/live_daemon.log"
 STATE_FILE = ROOT / "scripts/daemon_state.json"
-DEFAULT_CKPT = str(ROOT / "checkpoints/multi_asset/best_multi_asset_epoch=12_val_loss=-0.0248.ckpt")
+DEFAULT_CKPT = str(ROOT / "checkpoints/macro_super_patchtst/best_macro_patchtst_epoch=epoch=09_val_loss=val_loss=-0.0704.ckpt")
 
 
 class FlushFileHandler(logging.FileHandler):
@@ -112,21 +117,22 @@ class MultiAssetTradingDaemon:
             stagger_seconds=3600,  # 1 hour spacing
         )
 
-        self.model: Optional[SuperPatchTST] = None
+        self.calendar = EconomicCalendarEngine()
+        self.model: Optional[MacroSuperPatchTST] = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.running = False
         self.last_bar_times: Dict[str, str] = {}
         self.processed_deal_tickets: set = set()
         self.state: Dict[str, Any] = {
             "status": "INITIALIZING",
-            "tier": "Balanced Growth (Precision Shield)",
+            "tier": "Balanced Growth (Macro Precision Shield)",
             "mode": self.mode,
             "symbols": self.symbols,
             "timeframe": self.timeframe,
             "base_risk_pct": self.base_risk_pct,
             "max_portfolio_risk_pct": max_portfolio_risk_pct,
             "magic_number": self.magic_number,
-            "model_architecture": "MultiAssetSuperPatchTST (Balanced Growth: 0.15% Risk / <1.14% MaxDD)",
+            "model_architecture": "MacroSuperPatchTST (23-Channel Economic Calendar Attention)",
             "last_update": datetime.now().isoformat(),
             "active_positions": [],
             "signals": {},
@@ -189,16 +195,16 @@ class MultiAssetTradingDaemon:
     def load_model(self) -> bool:
         if not os.path.exists(self.checkpoint_path):
             logger.warning(f"Checkpoint not found at {self.checkpoint_path}. Falling back.")
-            fallback = str(ROOT / "checkpoints/super_alpha/best_super_patchtst_epoch=09_val_loss=-0.0435.ckpt")
+            fallback = str(ROOT / "checkpoints/macro_super_patchtst/best_macro_patchtst_epoch=epoch=09_val_loss=val_loss=-0.0704.ckpt")
             self.checkpoint_path = fallback
 
         try:
-            self.model = SuperPatchTST.load_from_checkpoint(
+            self.model = MacroSuperPatchTST.load_from_checkpoint(
                 self.checkpoint_path,
                 seq_len=96,
                 patch_len=16,
                 stride=8,
-                input_dim=len(ALPHA_FEATURES),
+                input_dim=len(ALL_23_FEATURES),
                 output_dim=5,
                 d_model=128,
                 nhead=8,
@@ -208,10 +214,10 @@ class MultiAssetTradingDaemon:
             )
             self.model.eval()
             self.model.to(self.device)
-            logger.info(f"Multi-Asset Model loaded successfully on {self.device.upper()} from {Path(self.checkpoint_path).name}")
+            logger.info(f"Macro-Aware Multi-Asset Model (23-Channels) loaded successfully on {self.device.upper()} from {Path(self.checkpoint_path).name}")
             return True
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
+            logger.error(f"Failed to load macro model: {e}")
             return False
 
     def get_open_positions(self) -> List[Dict[str, Any]]:
@@ -246,9 +252,9 @@ class MultiAssetTradingDaemon:
         if len(raw_h1) < 96:
             return None
 
-        feat_df = engineer_18_alpha_features(raw_h1, raw_h4)
+        feat_df = engineer_23_macro_alpha_features(raw_h1, raw_h4, self.calendar)
         scaler = RobustScaler()
-        X = scaler.fit_transform(feat_df[ALPHA_FEATURES].values)
+        X = scaler.fit_transform(feat_df[ALL_23_FEATURES].values)
 
         x_t = torch.tensor(X[-96:], dtype=torch.float32).unsqueeze(0).to(self.device)
         with torch.no_grad():
