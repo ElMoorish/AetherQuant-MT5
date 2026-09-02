@@ -1,4 +1,4 @@
-﻿"""
+"""
 Autonomous Multi-Asset MT5 Live Execution Daemon (Balanced Growth Shield Edition)
 ================================================================================
 Universe: EURUSD, XAGUSD, NAS100, WTI
@@ -116,6 +116,7 @@ class MultiAssetTradingDaemon:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.running = False
         self.last_bar_times: Dict[str, str] = {}
+        self.processed_deal_tickets: set = set()
         self.state: Dict[str, Any] = {
             "status": "INITIALIZING",
             "tier": "Balanced Growth (Precision Shield)",
@@ -129,8 +130,49 @@ class MultiAssetTradingDaemon:
             "last_update": datetime.now().isoformat(),
             "active_positions": [],
             "signals": {},
-            "performance": {"total_trades": 0, "wins": 0, "losses": 0},
+            "performance": {"total_trades": 0, "wins": 0, "losses": 0, "net_pnl_usd": 0.0},
         }
+
+    def sync_closed_deals(self) -> None:
+        """
+        Polls MT5 historical closed deals to accurately track wins/losses,
+        update portfolio equity metrics, and trigger the 3-Hour Consecutive Loss Freeze.
+        """
+        if not (self.client.connected and MT5_AVAILABLE):
+            return
+        try:
+            from_date = datetime.now(timezone.utc) - timedelta(days=7)
+            to_date = datetime.now(timezone.utc) + timedelta(days=1)
+            deals = mt5.history_deals_get(from_date, to_date)
+            if not deals:
+                return
+
+            for d in deals:
+                if d.magic == self.magic_number and d.entry == mt5.DEAL_ENTRY_OUT:
+                    if d.ticket not in self.processed_deal_tickets:
+                        self.processed_deal_tickets.add(d.ticket)
+                        net_pnl = float(d.profit + d.commission + d.swap + d.fee)
+                        is_win = net_pnl > 0.0
+                        deal_time = datetime.fromtimestamp(d.time, tz=timezone.utc).replace(tzinfo=None)
+                        
+                        # Trigger consecutive loss tracker and cooling-off freeze
+                        self.portfolio_ctrl.record_trade_result(is_win=is_win, current_time=deal_time)
+                        
+                        perf = self.state["performance"]
+                        perf["total_trades"] = perf.get("total_trades", 0) + 1
+                        if is_win:
+                            perf["wins"] = perf.get("wins", 0) + 1
+                        else:
+                            perf["losses"] = perf.get("losses", 0) + 1
+                        perf["net_pnl_usd"] = round(perf.get("net_pnl_usd", 0.0) + net_pnl, 2)
+                        
+                        status_tag = f"🎉 WIN (+${net_pnl:.2f})" if is_win else f"🛑 LOSS (-${abs(net_pnl):.2f})"
+                        logger.info(
+                            f"📊 CLOSED DEAL DETECTED | Ticket #{d.ticket} ({d.symbol}) -> {status_tag} | "
+                            f"Consecutive Losses: {self.portfolio_ctrl.consecutive_losses}/2"
+                        )
+        except Exception as e:
+            logger.error(f"Error syncing closed deals: {e}")
 
     def connect(self) -> bool:
         connected = self.client.connect()
@@ -141,6 +183,7 @@ class MultiAssetTradingDaemon:
                 f"Balance: {acc.get('currency', 'USD')} {acc.get('balance', 0):,.2f} | "
                 f"Leverage: 1:{acc.get('leverage', 0)}"
             )
+            self.sync_closed_deals()
         return connected
 
     def load_model(self) -> bool:
@@ -212,7 +255,8 @@ class MultiAssetTradingDaemon:
             preds = self.model(x_t).cpu().numpy()[0]
 
         mean_pred = float(np.mean(preds))
-        signal_type = "BUY" if mean_pred > 0.00003 else ("SELL" if mean_pred < -0.00003 else "FLAT")
+        # True Production High-Conviction Alpha Signal Threshold (+/- 0.000300)
+        signal_type = "BUY" if mean_pred > 0.00030 else ("SELL" if mean_pred < -0.00030 else "FLAT")
 
         bar_time = str(feat_df["time"].iloc[-1]) if "time" in feat_df else datetime.now().isoformat()
         
@@ -234,7 +278,7 @@ class MultiAssetTradingDaemon:
         active_for_sym = [p for p in open_positions if self.portfolio_ctrl.clean_symbol(p["symbol"]) == symbol]
 
         if signal_type != "FLAT" and not active_for_sym:
-            # Evaluate Portfolio Risk Controller with Precision Safeguards
+            # Evaluate Portfolio Risk Controller with Precision Safeguards & News Shield
             risk_decision = self.portfolio_ctrl.calculate_permitted_risk(
                 candidate_symbol=res_sym,
                 candidate_direction=signal_type,
@@ -273,11 +317,14 @@ class MultiAssetTradingDaemon:
                     )
                     decision["execution"] = exec_res
                     self.portfolio_ctrl.last_entry_time = datetime.now(timezone.utc).replace(tzinfo=None)
-                    logger.info(f"🚀 LIVE ORDER: {signal_type} {lot_size} {symbol} | SL: {effective_sl_pts}pts | Ticket: {exec_res.get('order')}")
+                    logger.info(
+                        f"🚀 HIGH-CONVICTION LIVE ORDER: {signal_type} {lot_size} {symbol} | "
+                        f"Forecast: {mean_pred:+.6f} | SL: {effective_sl_pts}pts | Ticket: {exec_res.get('order')}"
+                    )
                 else:
                     decision["execution"] = {"mode": "PAPER", "status": "SIMULATED", "action": signal_type, "volume": lot_size}
                     self.portfolio_ctrl.last_entry_time = datetime.now(timezone.utc).replace(tzinfo=None)
-                    logger.info(f"[PAPER] Simulated {signal_type} {lot_size} {symbol} @ {current_price}")
+                    logger.info(f"[PAPER] Simulated {signal_type} {lot_size} {symbol} @ {current_price} | Forecast: {mean_pred:+.6f}")
             else:
                 logger.info(f"Entry Gate Blocked for {symbol}: {risk_decision['reason']}")
 
@@ -288,6 +335,9 @@ class MultiAssetTradingDaemon:
         equity = float(acc.get("equity", 10000.0))
         balance = float(acc.get("balance", 10000.0))
         open_pos = self.get_open_positions()
+        
+        # Synchronize historical data before cycle
+        self.sync_closed_deals()
 
         cycle_results = {}
         for sym in self.symbols:
@@ -338,11 +388,13 @@ class MultiAssetTradingDaemon:
                         self.run_cycle()
                         self.last_bar_times["EURUSD"] = cur_bar
 
-                # Trailing stops management
-                if self.mode == "live-demo" and self.client.connected:
-                    for p in self.get_open_positions():
-                        atr_pts = self.risk_mgr.calculate_atr_stop_distance(p["symbol"], self.timeframe)
-                        self.router.update_trailing_stop(p["ticket"], p["symbol"], atr_pts * 1.5, step_points=10.0)
+                # Continuous closed-deal and trailing stop sync
+                if self.client.connected and MT5_AVAILABLE:
+                    self.sync_closed_deals()
+                    if self.mode == "live-demo":
+                        for p in self.get_open_positions():
+                            atr_pts = self.risk_mgr.calculate_atr_stop_distance(p["symbol"], self.timeframe)
+                            self.router.update_trailing_stop(p["ticket"], p["symbol"], atr_pts * 1.5, step_points=10.0)
 
                 time.sleep(poll_interval)
         except KeyboardInterrupt:
