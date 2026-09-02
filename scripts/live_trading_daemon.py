@@ -71,14 +71,18 @@ class FlushFileHandler(logging.FileHandler):
         self.flush()
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        FlushFileHandler(LOG_FILE, mode="a", encoding="utf-8"),
-    ],
-)
+# Configure Root and Module Loggers explicitly (bypassing PyTorch Lightning override)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+file_h = FlushFileHandler(LOG_FILE, mode="a", encoding="utf-8")
+file_h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+root_logger.addHandler(file_h)
+
+stream_h = logging.StreamHandler(sys.stdout)
+stream_h.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+root_logger.addHandler(stream_h)
+
 logger = logging.getLogger("MultiAssetDaemon")
 
 
