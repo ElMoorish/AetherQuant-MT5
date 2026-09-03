@@ -308,13 +308,51 @@ class MultiAssetTradingDaemon:
         # Check existing positions for this symbol
         active_for_sym = [p for p in open_positions if self.portfolio_ctrl.clean_symbol(p["symbol"]) == symbol]
 
-        # 1. Dynamic Model-Driven Position Management for Active Trades
+        # 1. Dynamic Model-Driven Position Management for Active Trades (Breakeven Ratchet & Chandelier Trailing)
         if active_for_sym:
             for pos in active_for_sym:
                 pos_type = pos["type"]
                 ticket = pos["ticket"]
                 profit = pos.get("profit", 0.0)
+                price_open = pos.get("price_open", current_price)
+                current_sl = pos.get("sl", 0.0)
                 
+                # Compute ATR in price units for this asset
+                sym_atr_pts = self.risk_mgr.calculate_atr_stop_distance(res_sym, self.timeframe, atr_period=14)
+                sym_info = self.client.get_symbol_info(res_sym)
+                point = sym_info.get("point", 0.00001) if sym_info else 0.00001
+                atr_price = sym_atr_pts * point
+                dollar_risk = max(1.0, equity * self.base_risk_pct)
+                r_multiple = profit / dollar_risk
+
+                # ── LEVER 1: +1.0R BREAKEVEN RATCHET ──
+                # If floating profit touches +1.0R, ratchet SL to Breakeven + 0.15 ATR to lock in commissions
+                if r_multiple >= 1.0:
+                    if pos_type == "BUY":
+                        be_sl = price_open + (0.15 * atr_price)
+                        if current_sl < be_sl:
+                            self.router.modify_position_sl(ticket, be_sl)
+                            logger.info(f"🛡️ BREAKEVEN RATCHET LOCKED | Ticket #{ticket} ({symbol}) -> SL moved to {be_sl:.5f} (+1.0R profit)")
+                    elif pos_type == "SELL":
+                        be_sl = price_open - (0.15 * atr_price)
+                        if current_sl == 0.0 or current_sl > be_sl:
+                            self.router.modify_position_sl(ticket, be_sl)
+                            logger.info(f"🛡️ BREAKEVEN RATCHET LOCKED | Ticket #{ticket} ({symbol}) -> SL moved to {be_sl:.5f} (+1.0R profit)")
+
+                # ── LEVER 3: CHANDELIER VOLATILITY TRAILING STOP ──
+                # If floating profit reaches +1.5R, trail SL at 1.5 ATR below current market price
+                if r_multiple >= 1.5:
+                    if pos_type == "BUY":
+                        trail_sl = current_price - (1.5 * atr_price)
+                        if trail_sl > current_sl and trail_sl > price_open:
+                            self.router.modify_position_sl(ticket, trail_sl)
+                            logger.info(f"📈 CHANDELIER TRAILING STOP UPDATED | Ticket #{ticket} ({symbol}) -> New SL: {trail_sl:.5f}")
+                    elif pos_type == "SELL":
+                        trail_sl = current_price + (1.5 * atr_price)
+                        if (current_sl == 0.0 or trail_sl < current_sl) and trail_sl < price_open:
+                            self.router.modify_position_sl(ticket, trail_sl)
+                            logger.info(f"📈 CHANDELIER TRAILING STOP UPDATED | Ticket #{ticket} ({symbol}) -> New SL: {trail_sl:.5f}")
+
                 should_close = False
                 close_reason = ""
                 
@@ -326,10 +364,10 @@ class MultiAssetTradingDaemon:
                     should_close = True
                     close_reason = f"FORECAST_REVERSED_BULLISH (Forecast: {mean_pred:+.6f})"
                 
-                # Rule B: Alpha Target Captured (+2.0R profit capture)
-                if profit >= (equity * self.base_risk_pct * 2.0):
+                # Rule B: Alpha Target Captured (+3.5R macro drift capture)
+                if profit >= (equity * self.base_risk_pct * 3.5):
                     should_close = True
-                    close_reason = f"ALPHA_TARGET_CAPTURED (+${profit:.2f})"
+                    close_reason = f"MAX_ALPHA_EXPANSION_CAPTURED (+${profit:.2f})"
 
                 if should_close:
                     if self.mode == "live-demo" and self.client.connected:
@@ -340,6 +378,12 @@ class MultiAssetTradingDaemon:
 
         # 2. Evaluate New High-Conviction Entries
         elif signal_type != "FLAT":
+            now_utc = datetime.now(timezone.utc)
+            # Lever 4: Friday Liquidity Cutoff (No new entries after 20:00 UTC Friday)
+            if now_utc.weekday() == 4 and now_utc.hour >= 20:
+                logger.info(f"Weekend Liquidity Shield: Friday post-20:00 UTC entry blocked for {symbol}")
+                return decision
+
             # Evaluate Portfolio Risk Controller with Precision Safeguards & News Shield
             risk_decision = self.portfolio_ctrl.calculate_permitted_risk(
                 candidate_symbol=res_sym,
@@ -347,26 +391,33 @@ class MultiAssetTradingDaemon:
                 open_positions=open_positions,
                 equity=equity,
                 balance=balance,
-                current_time=datetime.now(timezone.utc).replace(tzinfo=None),
+                current_time=now_utc.replace(tzinfo=None),
             )
 
             decision["risk_evaluation"] = risk_decision
 
             if risk_decision["permitted"]:
-                auth_risk_pct = risk_decision["risk_pct"]
-                # 2.5x ATR Disaster Emergency Stop Loss (Allows room for macro move, primary exit is dynamic model)
+                base_auth_risk = risk_decision["risk_pct"]
+                # ── LEVER 2: CONVEX ALPHA-CONVICTION SIZING ──
+                # Scale risk 0.70x to 1.50x based on 5-horizon trajectory confidence
+                conv_mult = float(np.clip(1.0 + 2.5 * ((mean_traj - 0.00030) / 0.00100), 0.70, 1.50))
+                auth_risk_pct = min(base_auth_risk * conv_mult, self.base_risk_pct * 1.50)
+
+                # 2.5x ATR Disaster Emergency Stop Loss
                 raw_sl_pts = self.risk_mgr.calculate_atr_stop_distance(res_sym, self.timeframe, atr_period=14) * 2.5
                 
                 # Sizing with Hard Dollar-Risk Ceiling
                 lot_size, effective_sl_pts = self.risk_mgr.calculate_lot_size_and_sl(
                     res_sym, sl_points=raw_sl_pts, risk_pct=auth_risk_pct, account_equity=equity
                 )
-                tp_points = effective_sl_pts * 2.0
+                # 3.5x ATR Take Profit (1.4x of 2.5x SL) for Macro Trend Riding
+                tp_points = effective_sl_pts * 1.40
 
                 decision["lot_size"] = lot_size
                 decision["sl_points"] = effective_sl_pts
                 decision["tp_points"] = tp_points
                 decision["risk_pct_used"] = auth_risk_pct
+                decision["conviction_multiplier"] = round(conv_mult, 2)
 
                 if self.mode == "live-demo":
                     exec_res = self.router.send_market_order(
@@ -376,18 +427,18 @@ class MultiAssetTradingDaemon:
                         sl_points=effective_sl_pts,
                         tp_points=tp_points,
                         magic_number=self.magic_number,
-                        comment=f"BAL_{symbol}"
+                        comment=f"OPT_{symbol}"
                     )
                     decision["execution"] = exec_res
-                    self.portfolio_ctrl.last_entry_time = datetime.now(timezone.utc).replace(tzinfo=None)
+                    self.portfolio_ctrl.last_entry_time = now_utc.replace(tzinfo=None)
                     logger.info(
                         f"🚀 HIGH-CONVICTION LIVE ORDER: {signal_type} {lot_size} {symbol} | "
-                        f"Forecast: {mean_pred:+.6f} | Emergency SL: {effective_sl_pts}pts | Ticket: {exec_res.get('order')}"
+                        f"Conviction: {conv_mult:.2f}x | Forecast: {mean_pred:+.6f} | SL: {effective_sl_pts}pts | TP: {tp_points}pts | Ticket: {exec_res.get('order')}"
                     )
                 else:
                     decision["execution"] = {"mode": "PAPER", "status": "SIMULATED", "action": signal_type, "volume": lot_size}
-                    self.portfolio_ctrl.last_entry_time = datetime.now(timezone.utc).replace(tzinfo=None)
-                    logger.info(f"[PAPER] Simulated {signal_type} {lot_size} {symbol} @ {current_price} | Forecast: {mean_pred:+.6f}")
+                    self.portfolio_ctrl.last_entry_time = now_utc.replace(tzinfo=None)
+                    logger.info(f"[PAPER] Simulated {signal_type} {lot_size} {symbol} @ {current_price} | Conviction: {conv_mult:.2f}x")
             else:
                 logger.info(f"Entry Gate Blocked for {symbol}: {risk_decision['reason']}")
 

@@ -229,6 +229,36 @@ class OrderRouter:
             "comment": result.comment,
         }
 
+    def modify_position_sl(self, ticket: int, new_sl: float) -> bool:
+        """Modifies the Stop Loss of an open position to an exact price."""
+        if not MT5_AVAILABLE or not self.client.connected:
+            return True
+
+        positions = mt5.positions_get(ticket=ticket)
+        if not positions or len(positions) == 0:
+            return False
+
+        pos = positions[0]
+        sym_info = self.client.get_symbol_info(pos.symbol)
+        digits = sym_info["digits"] if sym_info else 5
+        rounded_sl = round(new_sl, digits)
+
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "position": ticket,
+            "symbol": pos.symbol,
+            "sl": rounded_sl,
+            "tp": pos.tp,
+        }
+        res = mt5.order_send(request)
+        if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+            logger.info(f"🛡️ POSITION SL MODIFIED | Ticket #{ticket} ({pos.symbol}) -> New SL: {rounded_sl}")
+            return True
+        else:
+            err = res.comment if res else mt5.last_error()
+            logger.warning(f"Failed to modify SL for Ticket #{ticket}: {err}")
+            return False
+
     def update_trailing_stop(self, ticket: int, symbol: str, trailing_distance_points: float, step_points: float = 10.0) -> bool:
         if not MT5_AVAILABLE or not self.client.connected:
             return True
